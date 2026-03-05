@@ -4,7 +4,13 @@ from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import BufferedInputFile, KeyboardButton, Message, ReplyKeyboardMarkup
+from aiogram.types import (
+    BufferedInputFile,
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 from sqlalchemy import select
 
 from app.core.config import settings
@@ -21,13 +27,40 @@ class RegistrationState(StatesGroup):
     waiting_for_confirmation = State()
 
 
-def build_confirm_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="Подтвердить регистрацию")],
-            [KeyboardButton(text="Заполнить заново")],
-        ],
-        resize_keyboard=True,
+CALLBACK_START_REGISTRATION = "registration:start"
+CALLBACK_CONFIRM_REGISTRATION = "registration:confirm"
+CALLBACK_RESTART_REGISTRATION = "registration:restart"
+
+
+def build_start_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Начать регистрацию",
+                    callback_data=CALLBACK_START_REGISTRATION,
+                )
+            ]
+        ]
+    )
+
+
+def build_confirm_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Подтвердить регистрацию",
+                    callback_data=CALLBACK_CONFIRM_REGISTRATION,
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Заполнить заново",
+                    callback_data=CALLBACK_RESTART_REGISTRATION,
+                )
+            ],
+        ]
     )
 
 
@@ -54,7 +87,6 @@ async def ask_next_step(message: Message, state: FSMContext) -> None:
 
 
 @router.message(Command("register"))
-@router.message(CommandStart())
 async def start_handler(message: Message, state: FSMContext) -> None:
     if message.from_user is None:
         return
@@ -74,6 +106,46 @@ async def start_handler(message: Message, state: FSMContext) -> None:
     await state.clear()
     await state.update_data(step_index=0, answers={})
     await ask_next_step(message, state)
+
+
+@router.message(CommandStart())
+async def start_command_handler(message: Message, state: FSMContext) -> None:
+    if message.from_user is None:
+        return
+
+    telegram_id = message.from_user.id
+    with SessionLocal() as session:
+        visitor = session.scalar(
+            select(Visitor).where(Visitor.telegram_id == telegram_id)
+        )
+        if visitor and visitor.is_registration_completed and visitor.ticket:
+            await message.answer(
+                "Вы уже зарегистрированы.\n"
+                f"Ваш билет №{visitor.ticket.ticket_code}."
+            )
+            return
+
+    await state.clear()
+    await message.answer(
+        "Нажмите кнопку ниже, чтобы начать регистрацию.",
+        reply_markup=build_start_keyboard(),
+    )
+
+
+@router.callback_query(F.data == CALLBACK_START_REGISTRATION)
+async def start_registration_from_button(
+    callback: CallbackQuery,
+    state: FSMContext,
+) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+
+    await state.clear()
+    await state.update_data(step_index=0, answers={})
+    await callback.message.answer("Начинаем регистрацию.")
+    await ask_next_step(callback.message, state)
+    await callback.answer()
 
 
 @router.message(RegistrationState.waiting_for_step, F.text)
@@ -100,27 +172,33 @@ async def process_registration_step(message: Message, state: FSMContext) -> None
     await ask_next_step(message, state)
 
 
-@router.message(
+@router.callback_query(
     RegistrationState.waiting_for_confirmation,
-    F.text.casefold() == "заполнить заново",
+    F.data == CALLBACK_RESTART_REGISTRATION,
 )
-async def restart_registration(message: Message, state: FSMContext) -> None:
+async def restart_registration(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+
     await state.update_data(step_index=0, answers={})
-    await ask_next_step(message, state)
+    await ask_next_step(callback.message, state)
+    await callback.answer()
 
 
-@router.message(
+@router.callback_query(
     RegistrationState.waiting_for_confirmation,
-    F.text.casefold() == "подтвердить регистрацию",
+    F.data == CALLBACK_CONFIRM_REGISTRATION,
 )
-async def confirm_registration(message: Message, state: FSMContext) -> None:
-    if message.from_user is None:
+async def confirm_registration(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.from_user is None or callback.message is None:
+        await callback.answer()
         return
 
     data = await state.get_data()
     answers_data: dict[str, str] = data.get("answers", {})
-    telegram_id = message.from_user.id
-    username = message.from_user.username
+    telegram_id = callback.from_user.id
+    username = callback.from_user.username
     full_name = answers_data.get("full_name")
 
     with SessionLocal() as session:
@@ -162,22 +240,23 @@ async def confirm_registration(message: Message, state: FSMContext) -> None:
         ticket_code = visitor.ticket.ticket_code
 
     qr_bytes = generate_qr_png(ticket_code)
-    await message.answer(
+    await callback.message.answer(
         "Благодарим за регистрацию, "
         f"ваш билет №{ticket_code} зарегистрирован. "
         "Ждём вас 01-01-2026 в 14-00!"
     )
-    await message.answer_photo(
+    await callback.message.answer_photo(
         BufferedInputFile(qr_bytes, filename=f"{ticket_code}.png"),
         caption=f"QR-код билета: {ticket_code}",
     )
     await state.clear()
+    await callback.answer()
 
 
 @router.message(RegistrationState.waiting_for_confirmation, F.text)
 async def handle_confirmation_fallback(message: Message) -> None:
     await message.answer(
-        "Используйте кнопки: 'Подтвердить регистрацию' или 'Заполнить заново'."
+        "Используйте кнопки в сообщении: 'Подтвердить регистрацию' или 'Заполнить заново'."
     )
 
 
