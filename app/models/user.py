@@ -13,6 +13,7 @@ class Visitor(Base):
     telegram_id: Mapped[int] = mapped_column(BIGINT, unique=True, nullable=False, index=True)
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    telegram_avatar_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     is_registration_completed: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,

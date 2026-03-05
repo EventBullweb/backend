@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandStart
@@ -30,6 +31,29 @@ class RegistrationState(StatesGroup):
 CALLBACK_START_REGISTRATION = "registration:start"
 CALLBACK_CONFIRM_REGISTRATION = "registration:confirm"
 CALLBACK_RESTART_REGISTRATION = "registration:restart"
+
+
+async def fetch_telegram_avatar_url(bot: Bot, telegram_id: int) -> str | None:
+    try:
+        photos = await bot.get_user_profile_photos(user_id=telegram_id, limit=1)
+        if not photos.photos:
+            return None
+
+        largest_photo = photos.photos[0][-1]
+        file = await bot.get_file(largest_photo.file_id)
+        if not file.file_path:
+            return None
+
+        avatars_dir = Path(__file__).resolve().parents[1] / "app" / "static" / "avatars"
+        avatars_dir.mkdir(parents=True, exist_ok=True)
+
+        file_extension = Path(file.file_path).suffix or ".jpg"
+        avatar_filename = f"{telegram_id}{file_extension}"
+        avatar_path = avatars_dir / avatar_filename
+        await bot.download_file(file.file_path, destination=avatar_path)
+        return f"/static/avatars/{avatar_filename}"
+    except Exception:
+        return None
 
 
 def build_start_keyboard() -> InlineKeyboardMarkup:
@@ -200,6 +224,7 @@ async def confirm_registration(callback: CallbackQuery, state: FSMContext) -> No
     telegram_id = callback.from_user.id
     username = callback.from_user.username
     full_name = answers_data.get("full_name")
+    telegram_avatar_url = await fetch_telegram_avatar_url(callback.bot, telegram_id)
 
     with SessionLocal() as session:
         visitor = session.scalar(
@@ -210,6 +235,7 @@ async def confirm_registration(callback: CallbackQuery, state: FSMContext) -> No
                 telegram_id=telegram_id,
                 username=username,
                 full_name=full_name,
+                telegram_avatar_url=telegram_avatar_url,
                 is_registration_completed=True,
             )
             session.add(visitor)
@@ -217,6 +243,8 @@ async def confirm_registration(callback: CallbackQuery, state: FSMContext) -> No
         else:
             visitor.username = username
             visitor.full_name = full_name
+            if telegram_avatar_url is not None:
+                visitor.telegram_avatar_url = telegram_avatar_url
             visitor.is_registration_completed = True
             visitor.answers.clear()
 

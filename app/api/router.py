@@ -2,7 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.schemas.ticket import TicketActivateRequest, TicketActivateResponse
+from app.schemas.ticket import (
+    TicketActivateRequest,
+    TicketActivateResponse,
+    TicketOwnerSchema,
+)
 from app.services.tickets import activate_ticket
 
 router = APIRouter()
@@ -36,4 +40,10 @@ async def activate_ticket_endpoint(
         status=activation_status,
         ticket_code=ticket.ticket_code,
         activated_at=ticket.activated_at,
+        owner=TicketOwnerSchema(
+            telegram_id=ticket.visitor.telegram_id,
+            username=ticket.visitor.username,
+            full_name=ticket.visitor.full_name,
+            telegram_avatar_url=ticket.visitor.telegram_avatar_url,
+        ),
     )
