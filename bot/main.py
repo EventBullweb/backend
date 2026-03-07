@@ -18,7 +18,8 @@ from aiogram.types import (
     ReplyKeyboardRemove,
 )
 from sqlalchemy import select
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
+import qrcode
 
 from app.core.config import settings
 from app.db.session import SessionLocal
@@ -202,7 +203,7 @@ BOT_MESSAGES_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 BOT_TICKETS_IMAGES_DIR = BOT_STATIC_DIR / "tickets"
 BOT_TICKETS_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 TICKET_TEMPLATE_IMAGE_PATH = BOT_MESSAGES_IMAGES_DIR / "without_qr_code.jpg"
-TICKET_TEXT_COLOR = (0x58, 0x2D, 0x15, 0xFF)
+TICKET_FOREGROUND_COLOR = (0x58, 0x2D, 0x15, 0xFF)
 
 # message_key -> источник фото:
 # - прямая ссылка: "https://example.com/image.jpg"
@@ -224,31 +225,27 @@ def build_ticket_image_path(ticket_number: str) -> Path:
     return BOT_TICKETS_IMAGES_DIR / f"{safe_ticket_number}.png"
 
 
-def pick_ticket_font(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    max_width: int,
-    max_height: int,
-) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    font_candidates = [
-        "arialbd.ttf",
-        "arial.ttf",
-        "DejaVuSans-Bold.ttf",
-        "DejaVuSans.ttf",
-    ]
-    min_side = min(max_width, max_height)
-    for size in range(max(16, min_side), 15, -2):
-        for candidate in font_candidates:
-            try:
-                font = ImageFont.truetype(candidate, size=size)
-            except OSError:
-                continue
-            text_bbox = draw.textbbox((0, 0), text=text, font=font)
-            text_width = text_bbox[2] - text_bbox[0]
-            text_height = text_bbox[3] - text_bbox[1]
-            if text_width <= max_width and text_height <= max_height:
-                return font
-    return ImageFont.load_default()
+def create_ticket_qr_image(payload: str, qr_side: int) -> Image.Image:
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=12,
+        border=0,
+    )
+    qr.add_data(payload)
+    qr.make(fit=True)
+    qr_image = qr.make_image(
+        fill_color=(TICKET_FOREGROUND_COLOR[0], TICKET_FOREGROUND_COLOR[1], TICKET_FOREGROUND_COLOR[2]),
+        back_color="white",
+    ).convert("RGBA")
+    qr_pixels = []
+    for red, green, blue, _ in qr_image.getdata():
+        if red == 255 and green == 255 and blue == 255:
+            qr_pixels.append((255, 255, 255, 0))
+        else:
+            qr_pixels.append(TICKET_FOREGROUND_COLOR)
+    qr_image.putdata(qr_pixels)
+    return qr_image.resize((qr_side, qr_side), Image.Resampling.NEAREST)
 
 
 def ensure_ticket_image(ticket_number: str) -> Path | None:
@@ -256,32 +253,19 @@ def ensure_ticket_image(ticket_number: str) -> Path | None:
         return None
 
     result_path = build_ticket_image_path(ticket_number)
-    if result_path.exists():
-        return result_path
     if not TICKET_TEMPLATE_IMAGE_PATH.exists():
         return None
 
     with Image.open(TICKET_TEMPLATE_IMAGE_PATH).convert("RGBA") as template_image:
-        overlay = Image.new("RGBA", template_image.size, (0, 0, 0, 0))
-        draw = ImageDraw.Draw(overlay)
-
-        text_area_width = int(template_image.width * 0.55)
-        text_area_height = int(template_image.height * 0.18)
-        font = pick_ticket_font(
-            draw=draw,
-            text=ticket_number,
-            max_width=text_area_width,
-            max_height=text_area_height,
+        qr_side = int(min(template_image.width, template_image.height) * 0.35)
+        qr_image = create_ticket_qr_image(
+            payload=ticket_number,
+            qr_side=qr_side,
         )
-        bbox = draw.textbbox((0, 0), text=ticket_number, font=font)
-        text_width = bbox[2] - bbox[0]
-        text_height = bbox[3] - bbox[1]
-        x = (template_image.width - text_width) // 2
-        y = (template_image.height - text_height) // 2
-        draw.text((x, y), ticket_number, fill=TICKET_TEXT_COLOR, font=font)
-
-        composed_image = Image.alpha_composite(template_image, overlay)
-        composed_image.save(result_path, format="PNG")
+        qr_x = (template_image.width - qr_image.width) // 2
+        qr_y = (template_image.height - qr_image.height) // 2
+        template_image.paste(qr_image, (qr_x, qr_y), qr_image)
+        template_image.save(result_path, format="PNG")
 
     return result_path
 
