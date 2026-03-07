@@ -16,7 +16,18 @@ class Ticket(Base):
         nullable=False,
         index=True,
     )
-    ticket_code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    ticket_number: Mapped[str] = mapped_column(
+        String(32),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+    lottery_code: Mapped[str | None] = mapped_column(
+        String(64),
+        unique=True,
+        nullable=True,
+        index=True,
+    )
     is_activated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

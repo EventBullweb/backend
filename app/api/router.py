@@ -22,7 +22,10 @@ async def activate_ticket_endpoint(
     payload: TicketActivateRequest,
     db: Session = Depends(get_db),
 ) -> TicketActivateResponse:
-    activation_status, ticket = activate_ticket(db=db, ticket_code=payload.ticket_code)
+    activation_status, ticket = activate_ticket(
+        db=db,
+        ticket_number=payload.ticket_number,
+    )
 
     if activation_status == "not_found":
         raise HTTPException(
@@ -38,7 +41,8 @@ async def activate_ticket_endpoint(
 
     return TicketActivateResponse(
         status=activation_status,
-        ticket_code=ticket.ticket_code,
+        ticket_number=ticket.ticket_number,
+        lottery_code=ticket.lottery_code,
         activated_at=ticket.activated_at,
         owner=TicketOwnerSchema(
             telegram_id=ticket.visitor.telegram_id,

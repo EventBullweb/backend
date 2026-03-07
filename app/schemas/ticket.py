@@ -1,10 +1,12 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class TicketActivateRequest(BaseModel):
-    ticket_code: str
+    ticket_number: str = Field(
+        validation_alias=AliasChoices("ticket_number", "ticket_code")
+    )
 
 
 class TicketOwnerSchema(BaseModel):
@@ -16,6 +18,7 @@ class TicketOwnerSchema(BaseModel):
 
 class TicketActivateResponse(BaseModel):
     status: str
-    ticket_code: str
+    ticket_number: str
+    lottery_code: str | None = None
     activated_at: datetime | None = None
     owner: TicketOwnerSchema

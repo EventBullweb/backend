@@ -12,8 +12,14 @@ class RegistrationStep:
 REGISTRATION_STEPS = [
     RegistrationStep(
         key="full_name",
-        label="ФИО",
-        prompt="Введите ваше ФИО:",
+        label="Имя",
+        prompt="Напишите Ваше имя:",
+        required=True,
+    ),
+    RegistrationStep(
+        key="phone",
+        label="Номер телефона",
+        prompt="Отправьте свой номер телефона кнопкой 'Отправить контакт':",
         required=True,
     ),
 ]
