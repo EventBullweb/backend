@@ -419,31 +419,14 @@ async def edit_navigation_message(
     text = render_bot_message(message_key, **context)
     photo_source = MESSAGE_PHOTO_SOURCES.get(message_key)
 
-    try:
-        if photo_source:
-            resolved_photo = resolve_photo_source(photo_source)
-            await callback.message.delete()
-            await callback.message.answer_photo(
-                photo=resolved_photo,
-                caption=text,
-                reply_markup=reply_markup,
-            )
-        else:
-            await callback.message.edit_text(text, reply_markup=reply_markup)
-    except TelegramBadRequest as exc:
-        error_text = str(exc).lower()
-        if "message is not modified" in error_text:
-            pass
-        elif photo_source and ("can't be deleted" in error_text):
-            await callback.message.answer_photo(
-                photo=resolve_photo_source(photo_source),
-                caption=text,
-                reply_markup=reply_markup,
-            )
-        elif photo_source:
-            await callback.message.answer(text, reply_markup=reply_markup)
-        else:
-            raise
+    if photo_source:
+        await callback.message.answer_photo(
+            photo=resolve_photo_source(photo_source),
+            caption=text,
+            reply_markup=reply_markup,
+        )
+    else:
+        await callback.message.answer(text, reply_markup=reply_markup)
     await callback.answer()
 
 
