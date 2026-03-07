@@ -3,6 +3,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# не отправляем на гитхаб картинки
+/app/static/avatars/*.jpg 
+
 # C extensions
 *.so
 

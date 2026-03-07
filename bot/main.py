@@ -3,11 +3,11 @@ from pathlib import Path
 import re
 
 from aiogram import Bot, Dispatcher, F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
-    BufferedInputFile,
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -21,9 +21,15 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models import Ticket, Visitor, VisitorAnswer
+from app.services.channel_broadcast import (
+    broadcast_source_message,
+    get_registered_recipient_ids,
+    get_source_recipient_ids,
+    has_source_deliveries,
+    remove_source_deliveries,
+)
 from app.services.ticket_numbers import generate_ticket_number
 from bot.registration_steps import REGISTRATION_STEPS
-from bot.tickets import generate_qr_png
 
 router = Router()
 
@@ -42,6 +48,8 @@ CALLBACK_SHOW_EVENT_PROGRAM = "menu:event-program"
 CALLBACK_CONTACT_ORGANIZER = "menu:contact-organizer"
 CALLBACK_ANNUL_TICKET = "ticket:annul"
 CALLBACK_BACK_TO_MAIN_MENU = "menu:back"
+DELETE_BROADCAST_COMMAND = "/sync_delete"
+DELETE_BROADCAST_MARKER = "#удалить"
 
 INTRO_TEXT = (
     "Давай добавим деталей!\n\n"
@@ -204,6 +212,19 @@ def build_ticket_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def build_back_to_main_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="ВЕРНУТЬСЯ В ГЛАВНОЕ МЕНЮ",
+                    callback_data=CALLBACK_BACK_TO_MAIN_MENU,
+                )
+            ]
+        ]
+    )
+
+
 def normalize_phone(raw_phone: str) -> str:
     normalized = re.sub(r"[^\d+]", "", raw_phone.strip())
     if normalized.count("+") > 1 or ("+" in normalized and not normalized.startswith("+")):
@@ -220,6 +241,23 @@ def generate_unique_ticket_number(session) -> str:
         if existing is None:
             return candidate
     raise RuntimeError("Failed to generate unique ticket number.")
+
+
+async def edit_navigation_message(
+    callback: CallbackQuery,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
+) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+
+    try:
+        await callback.message.edit_text(text, reply_markup=reply_markup)
+    except TelegramBadRequest as exc:
+        if "message is not modified" not in str(exc).lower():
+            raise
+    await callback.answer()
 
 
 async def ask_next_step(message: Message, state: FSMContext) -> None:
@@ -300,16 +338,12 @@ async def show_registration_info(
     callback: CallbackQuery,
     state: FSMContext,
 ) -> None:
-    if callback.message is None:
-        await callback.answer()
-        return
-
     await state.clear()
-    await callback.message.answer(
+    await edit_navigation_message(
+        callback,
         REGISTRATION_INFO_TEXT,
         reply_markup=build_registration_entry_keyboard(),
     )
-    await callback.answer()
 
 
 @router.callback_query(F.data == CALLBACK_START_REGISTRATION)
@@ -475,12 +509,12 @@ async def confirm_registration(callback: CallbackQuery, state: FSMContext) -> No
 
         ticket_number = visitor.ticket.ticket_number
 
-    await callback.message.answer(
+    await edit_navigation_message(
+        callback,
         f"{REGISTRATION_SUCCESS_TEXT}\n\nВаш билет №{ticket_number}.",
         reply_markup=build_main_menu_keyboard(),
     )
     await state.clear()
-    await callback.answer()
 
 
 @router.message(RegistrationState.waiting_for_confirmation, F.text)
@@ -501,20 +535,17 @@ async def show_my_ticket(callback: CallbackQuery) -> None:
             select(Visitor).where(Visitor.telegram_id == callback.from_user.id)
         )
         if visitor is None or visitor.ticket is None:
-            await callback.message.answer(
-                "Билет не найден. Пройдите регистрацию через /start."
+            await edit_navigation_message(
+                callback,
+                "Билет не найден. Пройдите регистрацию через /start.",
+                reply_markup=build_back_to_main_menu_keyboard(),
             )
-            await callback.answer()
             return
 
         ticket_number = visitor.ticket.ticket_number
-        qr_bytes = generate_qr_png(ticket_number)
 
-    await callback.message.answer_photo(
-        BufferedInputFile(qr_bytes, filename=f"{ticket_number}.png"),
-        caption=f"Ваш QR-код билета №{ticket_number}",
-    )
-    await callback.message.answer(
+    await edit_navigation_message(
+        callback,
         "Ваш билет на закрытое мероприятие Show & Circus.\n\n"
         f"Номер билета: {ticket_number}\n"
         "Локация: Papa Moscow Club\n"
@@ -522,7 +553,6 @@ async def show_my_ticket(callback: CallbackQuery) -> None:
         "Концепция вечера: Драгоценные камни.",
         reply_markup=build_ticket_keyboard(),
     )
-    await callback.answer()
 
 
 @router.callback_query(F.data == CALLBACK_ANNUL_TICKET)
@@ -536,63 +566,156 @@ async def annul_ticket(callback: CallbackQuery) -> None:
             select(Visitor).where(Visitor.telegram_id == callback.from_user.id)
         )
         if visitor is None or visitor.ticket is None:
-            await callback.message.answer("Активного билета не найдено.")
-            await callback.answer()
+            await edit_navigation_message(
+                callback,
+                "Активного билета не найдено.",
+                reply_markup=build_back_to_main_menu_keyboard(),
+            )
             return
 
         if visitor.ticket.is_activated:
-            await callback.message.answer(
-                "Этот билет уже активирован на входе, аннулирование недоступно."
+            await edit_navigation_message(
+                callback,
+                "Этот билет уже активирован на входе, аннулирование недоступно.",
+                reply_markup=build_back_to_main_menu_keyboard(),
             )
-            await callback.answer()
             return
 
         session.delete(visitor.ticket)
         visitor.is_registration_completed = False
         session.commit()
 
-    await callback.message.answer(
+    await edit_navigation_message(
+        callback,
         "Ваш билет аннулирован.\n\n"
         "Нам очень жаль, что вы не сможете присутствовать на мероприятии Show & Circus.\n"
-        "Будем рады видеть вас на следующих событиях."
+        "Будем рады видеть вас на следующих событиях.",
+        reply_markup=build_back_to_main_menu_keyboard(),
     )
-    await callback.answer()
 
 
 @router.callback_query(F.data == CALLBACK_BACK_TO_MAIN_MENU)
 async def back_to_main_menu(callback: CallbackQuery) -> None:
-    if callback.message is None:
-        await callback.answer()
-        return
-
-    await callback.message.answer(
+    await edit_navigation_message(
+        callback,
         "Главное меню:",
         reply_markup=build_main_menu_keyboard(),
     )
-    await callback.answer()
 
 
 @router.callback_query(F.data == CALLBACK_SHOW_EVENT_PROGRAM)
 async def show_event_program(callback: CallbackQuery) -> None:
-    if callback.message is None:
-        await callback.answer()
-        return
-
-    await callback.message.answer(EVENT_PROGRAM_TEXT)
-    await callback.answer()
+    await edit_navigation_message(
+        callback,
+        EVENT_PROGRAM_TEXT,
+        reply_markup=build_back_to_main_menu_keyboard(),
+    )
 
 
 @router.callback_query(F.data == CALLBACK_CONTACT_ORGANIZER)
 async def contact_organizer(callback: CallbackQuery) -> None:
-    if callback.message is None:
-        await callback.answer()
+    await edit_navigation_message(
+        callback,
+        "Связь с организатором: @showandcircus_support\n"
+        "Если у вас нет Telegram-юзернейма для связи, ответьте на это сообщение.",
+        reply_markup=build_back_to_main_menu_keyboard(),
+    )
+
+
+@router.channel_post()
+async def distribute_channel_post(message: Message) -> None:
+    if settings.content_channel_id == 0:
+        return
+    if message.chat.id != settings.content_channel_id:
+        return
+    if message.text and message.text.startswith(DELETE_BROADCAST_COMMAND):
+        await handle_delete_broadcast_command(message)
+        return
+    source_chat_id = message.chat.id
+    source_message_id = message.message_id
+
+    with SessionLocal() as session:
+        if has_source_deliveries(session, source_chat_id, source_message_id):
+            return
+
+        recipient_ids = get_registered_recipient_ids(session)
+        await broadcast_source_message(
+            bot=message.bot,
+            session=session,
+            source_chat_id=source_chat_id,
+            source_message_id=source_message_id,
+            recipient_ids=recipient_ids,
+        )
+
+
+@router.edited_channel_post()
+async def redistribute_edited_channel_post(message: Message) -> None:
+    if settings.content_channel_id == 0:
+        return
+    if message.chat.id != settings.content_channel_id:
+        return
+    source_chat_id = message.chat.id
+    source_message_id = message.message_id
+
+    with SessionLocal() as session:
+        if is_delete_broadcast_marker(message):
+            await remove_source_deliveries(
+                bot=message.bot,
+                session=session,
+                source_chat_id=source_chat_id,
+                source_message_id=source_message_id,
+            )
+            try:
+                await message.bot.delete_message(
+                    chat_id=source_chat_id,
+                    message_id=source_message_id,
+                )
+            except TelegramBadRequest:
+                pass
+            return
+
+        recipient_ids = get_source_recipient_ids(
+            session=session,
+            source_chat_id=source_chat_id,
+            source_message_id=source_message_id,
+        )
+        if not recipient_ids:
+            return
+
+        await remove_source_deliveries(
+            bot=message.bot,
+            session=session,
+            source_chat_id=source_chat_id,
+            source_message_id=source_message_id,
+        )
+        await broadcast_source_message(
+            bot=message.bot,
+            session=session,
+            source_chat_id=source_chat_id,
+            source_message_id=source_message_id,
+            recipient_ids=recipient_ids,
+        )
+
+
+async def handle_delete_broadcast_command(message: Message) -> None:
+    payload = (message.text or "").strip()
+    parts = payload.split(maxsplit=1)
+    if len(parts) != 2 or not parts[1].isdigit():
         return
 
-    await callback.message.answer(
-        "Связь с организатором: @showandcircus_support\n"
-        "Если у вас нет Telegram-юзернейма для связи, ответьте на это сообщение."
-    )
-    await callback.answer()
+    source_message_id = int(parts[1])
+    with SessionLocal() as session:
+        await remove_source_deliveries(
+            bot=message.bot,
+            session=session,
+            source_chat_id=message.chat.id,
+            source_message_id=source_message_id,
+        )
+
+
+def is_delete_broadcast_marker(message: Message) -> bool:
+    text = (message.text or message.caption or "").strip().casefold()
+    return text == DELETE_BROADCAST_MARKER
 
 
 @router.message()

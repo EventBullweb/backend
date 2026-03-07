@@ -7,6 +7,7 @@ from app.schemas.ticket import (
     TicketActivateResponse,
     TicketOwnerSchema,
 )
+from app.services.telegram_notifications import notify_ticket_activated
 from app.services.tickets import activate_ticket
 
 router = APIRouter()
@@ -37,6 +38,12 @@ async def activate_ticket_endpoint(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Activation error",
+        )
+
+    if activation_status == "activated" and ticket.lottery_code:
+        await notify_ticket_activated(
+            telegram_id=ticket.visitor.telegram_id,
+            lottery_code=ticket.lottery_code,
         )
 
     return TicketActivateResponse(
