@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.router import router
 from app.core.config import settings
 
-app = FastAPI(title=settings.app_name)
+app = FastAPI(title=settings.app_name, root_path="/api/v1")
 app.include_router(router)
 app.mount(
     "/static",
