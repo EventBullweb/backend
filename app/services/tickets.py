@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Ticket
@@ -21,3 +21,14 @@ def activate_ticket(db: Session, ticket_number: str) -> tuple[str, Ticket | None
     db.commit()
     db.refresh(ticket)
     return "activated", ticket
+
+
+def get_checkin_stats(db: Session) -> tuple[int, int]:
+    expected = db.scalar(select(func.count(Ticket.id))) or 0
+    already_activated = (
+        db.scalar(
+            select(func.count(Ticket.id)).where(Ticket.is_activated.is_(True))
+        )
+        or 0
+    )
+    return expected, already_activated

@@ -5,10 +5,11 @@ from app.db.session import get_db
 from app.schemas.ticket import (
     TicketActivateRequest,
     TicketActivateResponse,
+    TicketCheckinStatsResponse,
     TicketOwnerSchema,
 )
 from app.services.telegram_notifications import notify_ticket_activated
-from app.services.tickets import activate_ticket
+from app.services.tickets import activate_ticket, get_checkin_stats
 
 router = APIRouter()
 
@@ -57,4 +58,19 @@ async def activate_ticket_endpoint(
             full_name=ticket.visitor.full_name,
             telegram_avatar_url=ticket.visitor.telegram_avatar_url,
         ),
+    )
+
+
+@router.get(
+    "/tickets/checkin-stats",
+    tags=["tickets"],
+    response_model=TicketCheckinStatsResponse,
+)
+async def checkin_stats_endpoint(
+    db: Session = Depends(get_db),
+) -> TicketCheckinStatsResponse:
+    expected, already_activated = get_checkin_stats(db=db)
+    return TicketCheckinStatsResponse(
+        expected=expected,
+        already_activated=already_activated,
     )

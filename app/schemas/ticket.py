@@ -22,3 +22,8 @@ class TicketActivateResponse(BaseModel):
     lottery_code: str | None = None
     activated_at: datetime | None = None
     owner: TicketOwnerSchema
+
+
+class TicketCheckinStatsResponse(BaseModel):
+    expected: int
+    already_activated: int
