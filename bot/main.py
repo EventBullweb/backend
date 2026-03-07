@@ -199,7 +199,7 @@ async def send_bot_message(
     message_key: str,
     reply_markup: InlineKeyboardMarkup | ReplyKeyboardMarkup | ReplyKeyboardRemove | None = None,
     **context: str,
-) -> None:И
+) -> None:
     text = render_bot_message(message_key, **context)
     photo_url = MESSAGE_PHOTO_URLS.get(message_key)
     if photo_url:
