@@ -204,6 +204,8 @@ BOT_TICKETS_IMAGES_DIR = BOT_STATIC_DIR / "tickets"
 BOT_TICKETS_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 TICKET_TEMPLATE_IMAGE_PATH = BOT_MESSAGES_IMAGES_DIR / "without_qr_code.jpg"
 TICKET_FOREGROUND_COLOR = (0x58, 0x2D, 0x15, 0xFF)
+TICKET_QR_SIDE = 250
+TICKET_QR_TOP_LEFT = (440, 258)
 
 # message_key -> источник фото:
 # - прямая ссылка: "https://example.com/image.jpg"
@@ -257,13 +259,11 @@ def ensure_ticket_image(ticket_number: str) -> Path | None:
         return None
 
     with Image.open(TICKET_TEMPLATE_IMAGE_PATH).convert("RGBA") as template_image:
-        qr_side = int(min(template_image.width, template_image.height) * 0.35)
         qr_image = create_ticket_qr_image(
             payload=ticket_number,
-            qr_side=qr_side,
+            qr_side=TICKET_QR_SIDE,
         )
-        qr_x = (template_image.width - qr_image.width) // 2
-        qr_y = (template_image.height - qr_image.height) // 2
+        qr_x, qr_y = TICKET_QR_TOP_LEFT
         template_image.paste(qr_image, (qr_x, qr_y), qr_image)
         template_image.save(result_path, format="PNG")
 
