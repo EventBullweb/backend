@@ -89,6 +89,131 @@ EVENT_PROGRAM_TEXT = (
     "23:00 - Завершение мероприятия"
 )
 
+MESSAGE_KEY_INTRO = "intro"
+MESSAGE_KEY_REGISTRATION_INFO = "registration_info"
+MESSAGE_KEY_REGISTRATION_SUCCESS = "registration_success"
+MESSAGE_KEY_EVENT_PROGRAM = "event_program"
+MESSAGE_KEY_ALREADY_REGISTERED = "already_registered"
+MESSAGE_KEY_CONFIRMATION_SUMMARY = "confirmation_summary"
+MESSAGE_KEY_START_REGISTRATION = "start_registration"
+MESSAGE_KEY_CONTACT_READ_FAILED = "contact_read_failed"
+MESSAGE_KEY_USER_NOT_DETECTED = "user_not_detected"
+MESSAGE_KEY_CONTACT_WRONG_OWNER = "contact_wrong_owner"
+MESSAGE_KEY_WRONG_STEP_EXPECTED_TEXT = "wrong_step_expected_text"
+MESSAGE_KEY_PHONE_TOO_SHORT = "phone_too_short"
+MESSAGE_KEY_EMPTY_ANSWER = "empty_answer"
+MESSAGE_KEY_PHONE_ONLY_CONTACT = "phone_only_contact"
+MESSAGE_KEY_CONFIRMATION_FALLBACK = "confirmation_fallback"
+MESSAGE_KEY_TICKET_NOT_FOUND = "ticket_not_found"
+MESSAGE_KEY_MY_TICKET = "my_ticket"
+MESSAGE_KEY_NO_ACTIVE_TICKET = "no_active_ticket"
+MESSAGE_KEY_TICKET_ALREADY_ACTIVATED = "ticket_already_activated"
+MESSAGE_KEY_TICKET_ANNULLED = "ticket_annulled"
+MESSAGE_KEY_MAIN_MENU = "main_menu"
+MESSAGE_KEY_CONTACT_ORGANIZER = "contact_organizer"
+MESSAGE_KEY_FALLBACK_START = "fallback_start"
+MESSAGE_KEY_REGISTRATION_STEP_PREFIX = "registration_step_prompt"
+
+REGISTRATION_STEPS_BY_KEY = {step.key: step for step in REGISTRATION_STEPS}
+REGISTRATION_STEP_MESSAGE_KEYS = {
+    step.key: f"{MESSAGE_KEY_REGISTRATION_STEP_PREFIX}.{step.key}"
+    for step in REGISTRATION_STEPS
+}
+
+BOT_MESSAGE_TEMPLATES = {
+    MESSAGE_KEY_INTRO: INTRO_TEXT,
+    MESSAGE_KEY_REGISTRATION_INFO: REGISTRATION_INFO_TEXT,
+    MESSAGE_KEY_REGISTRATION_SUCCESS: (
+        f"{REGISTRATION_SUCCESS_TEXT}\n\nВаш билет №{{ticket_number}}."
+    ),
+    MESSAGE_KEY_EVENT_PROGRAM: EVENT_PROGRAM_TEXT,
+    MESSAGE_KEY_ALREADY_REGISTERED: (
+        "Вы уже зарегистрированы. Ваш билет №{ticket_number}."
+    ),
+    MESSAGE_KEY_CONFIRMATION_SUMMARY: (
+        "Проверьте введенные данные:\n\n"
+        "{summary_lines}\n\nПодтвердить регистрацию?"
+    ),
+    MESSAGE_KEY_START_REGISTRATION: "Начинаем регистрацию.",
+    MESSAGE_KEY_CONTACT_READ_FAILED: "Не удалось прочитать контакт. Попробуйте еще раз.",
+    MESSAGE_KEY_USER_NOT_DETECTED: "Не удалось определить пользователя. Попробуйте снова.",
+    MESSAGE_KEY_CONTACT_WRONG_OWNER: (
+        "Нужно отправить контакт именно вашего Telegram-аккаунта. "
+        "Нажмите кнопку 'Отправить контакт'."
+    ),
+    MESSAGE_KEY_WRONG_STEP_EXPECTED_TEXT: "Сейчас ожидается другой шаг. Введите ответ в тексте.",
+    MESSAGE_KEY_PHONE_TOO_SHORT: (
+        "Номер выглядит слишком коротким. Отправьте корректный номер."
+    ),
+    MESSAGE_KEY_EMPTY_ANSWER: "Пустой ответ не подходит. Введите значение еще раз.",
+    MESSAGE_KEY_PHONE_ONLY_CONTACT: (
+        "Номер телефона принимается только через кнопку 'Отправить контакт'."
+    ),
+    MESSAGE_KEY_CONFIRMATION_FALLBACK: (
+        "Используйте кнопки: 'Подтвердить регистрацию' или 'Заполнить заново'."
+    ),
+    MESSAGE_KEY_TICKET_NOT_FOUND: "Билет не найден. Пройдите регистрацию через /start.",
+    MESSAGE_KEY_MY_TICKET: (
+        "Ваш билет на закрытое мероприятие Show & Circus.\n\n"
+        "Номер билета: {ticket_number}\n"
+        "Локация: Papa Moscow Club\n"
+        "Дата и время: 16 марта, 18:00-23:00\n\n"
+        "Концепция вечера: Драгоценные камни."
+    ),
+    MESSAGE_KEY_NO_ACTIVE_TICKET: "Активного билета не найдено.",
+    MESSAGE_KEY_TICKET_ALREADY_ACTIVATED: (
+        "Этот билет уже активирован на входе, аннулирование недоступно."
+    ),
+    MESSAGE_KEY_TICKET_ANNULLED: (
+        "Ваш билет аннулирован.\n\n"
+        "Нам очень жаль, что вы не сможете присутствовать на мероприятии Show & Circus.\n"
+        "Будем рады видеть вас на следующих событиях."
+    ),
+    MESSAGE_KEY_MAIN_MENU: "Главное меню:",
+    MESSAGE_KEY_CONTACT_ORGANIZER: (
+        "Связь с организатором: @showandcircus_support\n"
+        "Если у вас нет Telegram-юзернейма для связи, ответьте на это сообщение."
+    ),
+    MESSAGE_KEY_FALLBACK_START: (
+        "Напишите /start, чтобы открыть главное меню и регистрацию."
+    ),
+}
+BOT_MESSAGE_TEMPLATES.update(
+    {
+        key: REGISTRATION_STEPS_BY_KEY[step_key].prompt
+        for step_key, key in REGISTRATION_STEP_MESSAGE_KEYS.items()
+    }
+)
+
+# Сюда можно добавить связку message_key -> прямая ссылка на фото.
+MESSAGE_PHOTO_URLS: dict[str, str] = {}
+
+
+def render_bot_message(message_key: str, **context: str) -> str:
+    template = BOT_MESSAGE_TEMPLATES[message_key]
+    return template.format(**context)
+
+
+async def send_bot_message(
+    message: Message,
+    message_key: str,
+    reply_markup: InlineKeyboardMarkup | ReplyKeyboardMarkup | ReplyKeyboardRemove | None = None,
+    **context: str,
+) -> None:И
+    text = render_bot_message(message_key, **context)
+    photo_url = MESSAGE_PHOTO_URLS.get(message_key)
+    if photo_url:
+        try:
+            await message.answer_photo(
+                photo=photo_url,
+                caption=text,
+                reply_markup=reply_markup,
+            )
+            return
+        except TelegramBadRequest:
+            pass
+    await message.answer(text, reply_markup=reply_markup)
+
 
 async def fetch_telegram_avatar_url(bot: Bot, telegram_id: int) -> str | None:
     try:
@@ -245,17 +370,40 @@ def generate_unique_ticket_number(session) -> str:
 
 async def edit_navigation_message(
     callback: CallbackQuery,
-    text: str,
+    message_key: str,
     reply_markup: InlineKeyboardMarkup | None = None,
+    **context: str,
 ) -> None:
     if callback.message is None:
         await callback.answer()
         return
 
+    text = render_bot_message(message_key, **context)
+    photo_url = MESSAGE_PHOTO_URLS.get(message_key)
+
     try:
-        await callback.message.edit_text(text, reply_markup=reply_markup)
+        if photo_url:
+            await callback.message.delete()
+            await callback.message.answer_photo(
+                photo=photo_url,
+                caption=text,
+                reply_markup=reply_markup,
+            )
+        else:
+            await callback.message.edit_text(text, reply_markup=reply_markup)
     except TelegramBadRequest as exc:
-        if "message is not modified" not in str(exc).lower():
+        error_text = str(exc).lower()
+        if "message is not modified" in error_text:
+            pass
+        elif photo_url and ("can't be deleted" in error_text):
+            await callback.message.answer_photo(
+                photo=photo_url,
+                caption=text,
+                reply_markup=reply_markup,
+            )
+        elif photo_url:
+            await callback.message.answer(text, reply_markup=reply_markup)
+        else:
             raise
     await callback.answer()
 
@@ -269,19 +417,28 @@ async def ask_next_step(message: Message, state: FSMContext) -> None:
             f"{step.label}: {answers.get(step.key, '')}" for step in REGISTRATION_STEPS
         ]
         await state.set_state(RegistrationState.waiting_for_confirmation)
-        await message.answer(
-            "Проверьте введенные данные:\n\n"
-            + "\n".join(summary_lines)
-            + "\n\nПодтвердить регистрацию?",
+        await send_bot_message(
+            message,
+            MESSAGE_KEY_CONFIRMATION_SUMMARY,
             reply_markup=build_confirm_keyboard(),
+            summary_lines="\n".join(summary_lines),
         )
         return
 
     step = REGISTRATION_STEPS[step_index]
+    step_message_key = REGISTRATION_STEP_MESSAGE_KEYS[step.key]
     if step.key == "phone":
-        await message.answer(step.prompt, reply_markup=build_phone_keyboard())
+        await send_bot_message(
+            message,
+            step_message_key,
+            reply_markup=build_phone_keyboard(),
+        )
     else:
-        await message.answer(step.prompt, reply_markup=ReplyKeyboardRemove())
+        await send_bot_message(
+            message,
+            step_message_key,
+            reply_markup=ReplyKeyboardRemove(),
+        )
     await state.set_state(RegistrationState.waiting_for_step)
 
 
@@ -296,15 +453,18 @@ async def start_handler(message: Message, state: FSMContext) -> None:
             select(Visitor).where(Visitor.telegram_id == telegram_id)
         )
         if visitor and visitor.is_registration_completed and visitor.ticket:
-            await message.answer(
-                f"Вы уже зарегистрированы. Ваш билет №{visitor.ticket.ticket_number}.",
+            await send_bot_message(
+                message,
+                MESSAGE_KEY_ALREADY_REGISTERED,
                 reply_markup=build_main_menu_keyboard(),
+                ticket_number=visitor.ticket.ticket_number,
             )
             return
 
     await state.clear()
-    await message.answer(
-        REGISTRATION_INFO_TEXT,
+    await send_bot_message(
+        message,
+        MESSAGE_KEY_REGISTRATION_INFO,
         reply_markup=build_registration_entry_keyboard(),
     )
 
@@ -320,15 +480,18 @@ async def start_command_handler(message: Message, state: FSMContext) -> None:
             select(Visitor).where(Visitor.telegram_id == telegram_id)
         )
         if visitor and visitor.is_registration_completed and visitor.ticket:
-            await message.answer(
-                f"Вы уже зарегистрированы. Ваш билет №{visitor.ticket.ticket_number}.",
+            await send_bot_message(
+                message,
+                MESSAGE_KEY_ALREADY_REGISTERED,
                 reply_markup=build_main_menu_keyboard(),
+                ticket_number=visitor.ticket.ticket_number,
             )
             return
 
     await state.clear()
-    await message.answer(
-        INTRO_TEXT,
+    await send_bot_message(
+        message,
+        MESSAGE_KEY_INTRO,
         reply_markup=build_start_keyboard(),
     )
 
@@ -341,7 +504,7 @@ async def show_registration_info(
     await state.clear()
     await edit_navigation_message(
         callback,
-        REGISTRATION_INFO_TEXT,
+        MESSAGE_KEY_REGISTRATION_INFO,
         reply_markup=build_registration_entry_keyboard(),
     )
 
@@ -356,7 +519,11 @@ async def start_registration_from_button(
         return
 
     await state.update_data(step_index=0, answers={})
-    await callback.message.answer("Начинаем регистрацию.", reply_markup=ReplyKeyboardRemove())
+    await send_bot_message(
+        callback.message,
+        MESSAGE_KEY_START_REGISTRATION,
+        reply_markup=ReplyKeyboardRemove(),
+    )
     await ask_next_step(callback.message, state)
     await callback.answer()
 
@@ -365,16 +532,13 @@ async def start_registration_from_button(
 async def process_phone_contact(message: Message, state: FSMContext) -> None:
     contact = message.contact
     if contact is None:
-        await message.answer("Не удалось прочитать контакт. Попробуйте еще раз.")
+        await send_bot_message(message, MESSAGE_KEY_CONTACT_READ_FAILED)
         return
     if message.from_user is None:
-        await message.answer("Не удалось определить пользователя. Попробуйте снова.")
+        await send_bot_message(message, MESSAGE_KEY_USER_NOT_DETECTED)
         return
     if contact.user_id != message.from_user.id:
-        await message.answer(
-            "Нужно отправить контакт именно вашего Telegram-аккаунта. "
-            "Нажмите кнопку 'Отправить контакт'."
-        )
+        await send_bot_message(message, MESSAGE_KEY_CONTACT_WRONG_OWNER)
         return
 
     data = await state.get_data()
@@ -385,12 +549,12 @@ async def process_phone_contact(message: Message, state: FSMContext) -> None:
 
     step = REGISTRATION_STEPS[step_index]
     if step.key != "phone":
-        await message.answer("Сейчас ожидается другой шаг. Введите ответ в тексте.")
+        await send_bot_message(message, MESSAGE_KEY_WRONG_STEP_EXPECTED_TEXT)
         return
 
     phone = normalize_phone(contact.phone_number)
     if len(phone.replace("+", "")) < 10:
-        await message.answer("Номер выглядит слишком коротким. Отправьте корректный номер.")
+        await send_bot_message(message, MESSAGE_KEY_PHONE_TOO_SHORT)
         return
 
     answers = dict(data.get("answers", {}))
@@ -403,7 +567,7 @@ async def process_phone_contact(message: Message, state: FSMContext) -> None:
 async def process_registration_step(message: Message, state: FSMContext) -> None:
     user_text = (message.text or "").strip()
     if not user_text:
-        await message.answer("Пустой ответ не подходит. Введите значение еще раз.")
+        await send_bot_message(message, MESSAGE_KEY_EMPTY_ANSWER)
         return
 
     data = await state.get_data()
@@ -415,8 +579,9 @@ async def process_registration_step(message: Message, state: FSMContext) -> None
     step = REGISTRATION_STEPS[step_index]
     answers = dict(data.get("answers", {}))
     if step.key == "phone":
-        await message.answer(
-            "Номер телефона принимается только через кнопку 'Отправить контакт'.",
+        await send_bot_message(
+            message,
+            MESSAGE_KEY_PHONE_ONLY_CONTACT,
             reply_markup=build_phone_keyboard(),
         )
         return
@@ -511,17 +676,16 @@ async def confirm_registration(callback: CallbackQuery, state: FSMContext) -> No
 
     await edit_navigation_message(
         callback,
-        f"{REGISTRATION_SUCCESS_TEXT}\n\nВаш билет №{ticket_number}.",
+        MESSAGE_KEY_REGISTRATION_SUCCESS,
         reply_markup=build_main_menu_keyboard(),
+        ticket_number=ticket_number,
     )
     await state.clear()
 
 
 @router.message(RegistrationState.waiting_for_confirmation, F.text)
 async def handle_confirmation_fallback(message: Message) -> None:
-    await message.answer(
-        "Используйте кнопки: 'Подтвердить регистрацию' или 'Заполнить заново'."
-    )
+    await send_bot_message(message, MESSAGE_KEY_CONFIRMATION_FALLBACK)
 
 
 @router.callback_query(F.data == CALLBACK_SHOW_MY_TICKET)
@@ -537,7 +701,7 @@ async def show_my_ticket(callback: CallbackQuery) -> None:
         if visitor is None or visitor.ticket is None:
             await edit_navigation_message(
                 callback,
-                "Билет не найден. Пройдите регистрацию через /start.",
+                MESSAGE_KEY_TICKET_NOT_FOUND,
                 reply_markup=build_back_to_main_menu_keyboard(),
             )
             return
@@ -546,12 +710,9 @@ async def show_my_ticket(callback: CallbackQuery) -> None:
 
     await edit_navigation_message(
         callback,
-        "Ваш билет на закрытое мероприятие Show & Circus.\n\n"
-        f"Номер билета: {ticket_number}\n"
-        "Локация: Papa Moscow Club\n"
-        "Дата и время: 16 марта, 18:00-23:00\n\n"
-        "Концепция вечера: Драгоценные камни.",
+        MESSAGE_KEY_MY_TICKET,
         reply_markup=build_ticket_keyboard(),
+        ticket_number=ticket_number,
     )
 
 
@@ -568,7 +729,7 @@ async def annul_ticket(callback: CallbackQuery) -> None:
         if visitor is None or visitor.ticket is None:
             await edit_navigation_message(
                 callback,
-                "Активного билета не найдено.",
+                MESSAGE_KEY_NO_ACTIVE_TICKET,
                 reply_markup=build_back_to_main_menu_keyboard(),
             )
             return
@@ -576,7 +737,7 @@ async def annul_ticket(callback: CallbackQuery) -> None:
         if visitor.ticket.is_activated:
             await edit_navigation_message(
                 callback,
-                "Этот билет уже активирован на входе, аннулирование недоступно.",
+                MESSAGE_KEY_TICKET_ALREADY_ACTIVATED,
                 reply_markup=build_back_to_main_menu_keyboard(),
             )
             return
@@ -587,9 +748,7 @@ async def annul_ticket(callback: CallbackQuery) -> None:
 
     await edit_navigation_message(
         callback,
-        "Ваш билет аннулирован.\n\n"
-        "Нам очень жаль, что вы не сможете присутствовать на мероприятии Show & Circus.\n"
-        "Будем рады видеть вас на следующих событиях.",
+        MESSAGE_KEY_TICKET_ANNULLED,
         reply_markup=build_back_to_main_menu_keyboard(),
     )
 
@@ -598,7 +757,7 @@ async def annul_ticket(callback: CallbackQuery) -> None:
 async def back_to_main_menu(callback: CallbackQuery) -> None:
     await edit_navigation_message(
         callback,
-        "Главное меню:",
+        MESSAGE_KEY_MAIN_MENU,
         reply_markup=build_main_menu_keyboard(),
     )
 
@@ -607,7 +766,7 @@ async def back_to_main_menu(callback: CallbackQuery) -> None:
 async def show_event_program(callback: CallbackQuery) -> None:
     await edit_navigation_message(
         callback,
-        EVENT_PROGRAM_TEXT,
+        MESSAGE_KEY_EVENT_PROGRAM,
         reply_markup=build_back_to_main_menu_keyboard(),
     )
 
@@ -616,8 +775,7 @@ async def show_event_program(callback: CallbackQuery) -> None:
 async def contact_organizer(callback: CallbackQuery) -> None:
     await edit_navigation_message(
         callback,
-        "Связь с организатором: @showandcircus_support\n"
-        "Если у вас нет Telegram-юзернейма для связи, ответьте на это сообщение.",
+        MESSAGE_KEY_CONTACT_ORGANIZER,
         reply_markup=build_back_to_main_menu_keyboard(),
     )
 
@@ -720,9 +878,7 @@ def is_delete_broadcast_marker(message: Message) -> bool:
 
 @router.message()
 async def fallback(message: Message) -> None:
-    await message.answer(
-        "Напишите /start, чтобы открыть главное меню и регистрацию."
-    )
+    await send_bot_message(message, MESSAGE_KEY_FALLBACK_START)
 
 
 async def run_bot() -> None:
