@@ -9,6 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     CallbackQuery,
+    FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     KeyboardButton,
@@ -134,7 +135,6 @@ BOT_MESSAGE_TEMPLATES = {
         "Проверьте введенные данные:\n\n"
         "{summary_lines}\n\nПодтвердить регистрацию?"
     ),
-    MESSAGE_KEY_START_REGISTRATION: "Начинаем регистрацию.",
     MESSAGE_KEY_CONTACT_READ_FAILED: "Не удалось прочитать контакт. Попробуйте еще раз.",
     MESSAGE_KEY_USER_NOT_DETECTED: "Не удалось определить пользователя. Попробуйте снова.",
     MESSAGE_KEY_CONTACT_WRONG_OWNER: (
@@ -185,13 +185,41 @@ BOT_MESSAGE_TEMPLATES.update(
     }
 )
 
-# Сюда можно добавить связку message_key -> прямая ссылка на фото.
-MESSAGE_PHOTO_URLS: dict[str, str] = {}
+BOT_STATIC_DIR = Path(__file__).resolve().parents[1] / "app" / "static"
+BOT_MESSAGES_IMAGES_DIR = BOT_STATIC_DIR / "bot_messages"
+BOT_MESSAGES_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+
+# message_key -> источник фото:
+# - прямая ссылка: "https://example.com/image.jpg"
+# - имя файла в app/static/bot_messages: "intro.jpg"
+# - статический путь: "/static/bot_messages/intro.jpg"
+MESSAGE_PHOTO_SOURCES: dict[str, str] = {
+    MESSAGE_KEY_INTRO: "start_command.png",
+    MESSAGE_KEY_REGISTRATION_INFO: "go_registration.png",
+    MESSAGE_KEY_REGISTRATION_SUCCESS: "registration_success.png",
+    MESSAGE_KEY_MAIN_MENU: "main_menu.png",
+    MESSAGE_KEY_EVENT_PROGRAM: "programma_of_event.png",
+    MESSAGE_KEY_TICKET_ALREADY_ACTIVATED: "ticket_activated.png",
+    MESSAGE_KEY_TICKET_ANNULLED: "ticket_annulirovan.png",
+}
 
 
 def render_bot_message(message_key: str, **context: str) -> str:
     template = BOT_MESSAGE_TEMPLATES[message_key]
     return template.format(**context)
+
+
+def resolve_photo_source(photo_source: str) -> str | FSInputFile:
+    normalized_source = photo_source.strip()
+    if normalized_source.startswith(("http://", "https://")):
+        return normalized_source
+
+    if normalized_source.startswith("/static/"):
+        relative_parts = normalized_source.removeprefix("/static/").split("/")
+        absolute_path = BOT_STATIC_DIR.joinpath(*relative_parts)
+        return FSInputFile(str(absolute_path))
+
+    return FSInputFile(str(BOT_MESSAGES_IMAGES_DIR / normalized_source))
 
 
 async def send_bot_message(
@@ -201,11 +229,11 @@ async def send_bot_message(
     **context: str,
 ) -> None:
     text = render_bot_message(message_key, **context)
-    photo_url = MESSAGE_PHOTO_URLS.get(message_key)
-    if photo_url:
+    photo_source = MESSAGE_PHOTO_SOURCES.get(message_key)
+    if photo_source:
         try:
             await message.answer_photo(
-                photo=photo_url,
+                photo=resolve_photo_source(photo_source),
                 caption=text,
                 reply_markup=reply_markup,
             )
@@ -379,13 +407,14 @@ async def edit_navigation_message(
         return
 
     text = render_bot_message(message_key, **context)
-    photo_url = MESSAGE_PHOTO_URLS.get(message_key)
+    photo_source = MESSAGE_PHOTO_SOURCES.get(message_key)
 
     try:
-        if photo_url:
+        if photo_source:
+            resolved_photo = resolve_photo_source(photo_source)
             await callback.message.delete()
             await callback.message.answer_photo(
-                photo=photo_url,
+                photo=resolved_photo,
                 caption=text,
                 reply_markup=reply_markup,
             )
@@ -395,13 +424,13 @@ async def edit_navigation_message(
         error_text = str(exc).lower()
         if "message is not modified" in error_text:
             pass
-        elif photo_url and ("can't be deleted" in error_text):
+        elif photo_source and ("can't be deleted" in error_text):
             await callback.message.answer_photo(
-                photo=photo_url,
+                photo=resolve_photo_source(photo_source),
                 caption=text,
                 reply_markup=reply_markup,
             )
-        elif photo_url:
+        elif photo_source:
             await callback.message.answer(text, reply_markup=reply_markup)
         else:
             raise
@@ -519,11 +548,6 @@ async def start_registration_from_button(
         return
 
     await state.update_data(step_index=0, answers={})
-    await send_bot_message(
-        callback.message,
-        MESSAGE_KEY_START_REGISTRATION,
-        reply_markup=ReplyKeyboardRemove(),
-    )
     await ask_next_step(callback.message, state)
     await callback.answer()
 

@@ -13,13 +13,14 @@ REGISTRATION_STEPS = [
     RegistrationStep(
         key="full_name",
         label="Имя",
-        prompt="Напишите Ваше имя:",
+        prompt="""Начинаем регистрацию.
+Напишите Ваше имя:""",
         required=True,
     ),
     RegistrationStep(
         key="phone",
         label="Номер телефона",
-        prompt="Отправьте свой номер телефона кнопкой 'Отправить контакт':",
+        prompt="""Финальное действие в регистрации и вы получаете билет 👇нажмите кнопку 'Отправить контакт'""",
         required=True,
     ),
 ]
