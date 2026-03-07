@@ -16,6 +16,7 @@ from aiogram.types import (
     Message,
     ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
+    User,
 )
 from sqlalchemy import select
 from PIL import Image
@@ -39,13 +40,10 @@ router = Router()
 
 class RegistrationState(StatesGroup):
     waiting_for_step = State()
-    waiting_for_confirmation = State()
 
 
 CALLBACK_SHOW_REGISTRATION_INFO = "registration:show-info"
 CALLBACK_START_REGISTRATION = "registration:start"
-CALLBACK_CONFIRM_REGISTRATION = "registration:confirm"
-CALLBACK_RESTART_REGISTRATION = "registration:restart"
 CALLBACK_SHOW_MY_TICKET = "menu:my-ticket"
 CALLBACK_SHOW_EVENT_PROGRAM = "menu:event-program"
 CALLBACK_CONTACT_ORGANIZER = "menu:contact-organizer"
@@ -97,7 +95,6 @@ MESSAGE_KEY_REGISTRATION_INFO = "registration_info"
 MESSAGE_KEY_REGISTRATION_SUCCESS = "registration_success"
 MESSAGE_KEY_EVENT_PROGRAM = "event_program"
 MESSAGE_KEY_ALREADY_REGISTERED = "already_registered"
-MESSAGE_KEY_CONFIRMATION_SUMMARY = "confirmation_summary"
 MESSAGE_KEY_START_REGISTRATION = "start_registration"
 MESSAGE_KEY_CONTACT_READ_FAILED = "contact_read_failed"
 MESSAGE_KEY_USER_NOT_DETECTED = "user_not_detected"
@@ -106,7 +103,6 @@ MESSAGE_KEY_WRONG_STEP_EXPECTED_TEXT = "wrong_step_expected_text"
 MESSAGE_KEY_PHONE_TOO_SHORT = "phone_too_short"
 MESSAGE_KEY_EMPTY_ANSWER = "empty_answer"
 MESSAGE_KEY_PHONE_ONLY_CONTACT = "phone_only_contact"
-MESSAGE_KEY_CONFIRMATION_FALLBACK = "confirmation_fallback"
 MESSAGE_KEY_TICKET_NOT_FOUND = "ticket_not_found"
 MESSAGE_KEY_MY_TICKET = "my_ticket"
 MESSAGE_KEY_NO_ACTIVE_TICKET = "no_active_ticket"
@@ -133,10 +129,6 @@ BOT_MESSAGE_TEMPLATES = {
     MESSAGE_KEY_ALREADY_REGISTERED: (
         "Вы уже зарегистрированы. Ваш билет №{ticket_number}."
     ),
-    MESSAGE_KEY_CONFIRMATION_SUMMARY: (
-        "Проверьте введенные данные:\n\n"
-        "{summary_lines}\n\nПодтвердить регистрацию?"
-    ),
     MESSAGE_KEY_CONTACT_READ_FAILED: "Не удалось прочитать контакт. Попробуйте еще раз.",
     MESSAGE_KEY_USER_NOT_DETECTED: "Не удалось определить пользователя. Попробуйте снова.",
     MESSAGE_KEY_CONTACT_WRONG_OWNER: (
@@ -150,9 +142,6 @@ BOT_MESSAGE_TEMPLATES = {
     MESSAGE_KEY_EMPTY_ANSWER: "Пустой ответ не подходит. Введите значение еще раз.",
     MESSAGE_KEY_PHONE_ONLY_CONTACT: (
         "Номер телефона принимается только через кнопку 'Отправить контакт'."
-    ),
-    MESSAGE_KEY_CONFIRMATION_FALLBACK: (
-        "Используйте кнопки: 'Подтвердить регистрацию' или 'Заполнить заново'."
     ),
     MESSAGE_KEY_TICKET_NOT_FOUND: "Билет не найден. Пройдите регистрацию через /start.",
     MESSAGE_KEY_MY_TICKET: (
@@ -358,25 +347,6 @@ def build_registration_entry_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def build_confirm_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="Подтвердить регистрацию",
-                    callback_data=CALLBACK_CONFIRM_REGISTRATION,
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Заполнить заново",
-                    callback_data=CALLBACK_RESTART_REGISTRATION,
-                )
-            ],
-        ]
-    )
-
-
 def build_phone_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -490,17 +460,24 @@ async def ask_next_step(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     step_index = data.get("step_index", 0)
     if step_index >= len(REGISTRATION_STEPS):
+        if message.from_user is None:
+            await send_bot_message(message, MESSAGE_KEY_USER_NOT_DETECTED)
+            return
+
         answers = data.get("answers", {})
-        summary_lines = [
-            f"{step.label}: {answers.get(step.key, '')}" for step in REGISTRATION_STEPS
-        ]
-        await state.set_state(RegistrationState.waiting_for_confirmation)
+        ticket_number = await complete_registration(
+            bot=message.bot,
+            user=message.from_user,
+            answers_data=answers,
+        )
+        ensure_ticket_image(ticket_number)
         await send_bot_message(
             message,
-            MESSAGE_KEY_CONFIRMATION_SUMMARY,
-            reply_markup=build_confirm_keyboard(),
-            summary_lines="\n".join(summary_lines),
+            MESSAGE_KEY_REGISTRATION_SUCCESS,
+            reply_markup=build_main_menu_keyboard(),
+            ticket_number=ticket_number,
         )
+        await state.clear()
         return
 
     step = REGISTRATION_STEPS[step_index]
@@ -668,35 +645,15 @@ async def process_registration_step(message: Message, state: FSMContext) -> None
     await ask_next_step(message, state)
 
 
-@router.callback_query(
-    RegistrationState.waiting_for_confirmation,
-    F.data == CALLBACK_RESTART_REGISTRATION,
-)
-async def restart_registration(callback: CallbackQuery, state: FSMContext) -> None:
-    if callback.message is None:
-        await callback.answer()
-        return
-
-    await state.update_data(step_index=0, answers={})
-    await ask_next_step(callback.message, state)
-    await callback.answer()
-
-
-@router.callback_query(
-    RegistrationState.waiting_for_confirmation,
-    F.data == CALLBACK_CONFIRM_REGISTRATION,
-)
-async def confirm_registration(callback: CallbackQuery, state: FSMContext) -> None:
-    if callback.from_user is None or callback.message is None:
-        await callback.answer()
-        return
-
-    data = await state.get_data()
-    answers_data: dict[str, str] = data.get("answers", {})
-    telegram_id = callback.from_user.id
-    username = callback.from_user.username
+async def complete_registration(
+    bot: Bot,
+    user: User,
+    answers_data: dict[str, str],
+) -> str:
+    telegram_id = user.id
+    username = user.username
     full_name = answers_data.get("full_name")
-    telegram_avatar_url = await fetch_telegram_avatar_url(callback.bot, telegram_id)
+    telegram_avatar_url = await fetch_telegram_avatar_url(bot, telegram_id)
 
     with SessionLocal() as session:
         visitor = session.scalar(
@@ -745,23 +702,7 @@ async def confirm_registration(callback: CallbackQuery, state: FSMContext) -> No
         session.refresh(visitor)
         session.refresh(visitor.ticket)
 
-        ticket_number = visitor.ticket.ticket_number
-
-    ensure_ticket_image(ticket_number)
-
-    await edit_navigation_message(
-        callback,
-        MESSAGE_KEY_REGISTRATION_SUCCESS,
-        reply_markup=build_main_menu_keyboard(),
-        ticket_number=ticket_number,
-    )
-    await state.clear()
-
-
-@router.message(RegistrationState.waiting_for_confirmation, F.text)
-async def handle_confirmation_fallback(message: Message) -> None:
-    await send_bot_message(message, MESSAGE_KEY_CONFIRMATION_FALLBACK)
-
+        return visitor.ticket.ticket_number
 
 @router.callback_query(F.data == CALLBACK_SHOW_MY_TICKET)
 async def show_my_ticket(callback: CallbackQuery) -> None:
