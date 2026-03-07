@@ -18,6 +18,7 @@ from aiogram.types import (
     ReplyKeyboardRemove,
 )
 from sqlalchemy import select
+from PIL import Image, ImageDraw, ImageFont
 
 from app.core.config import settings
 from app.db.session import SessionLocal
@@ -198,6 +199,10 @@ BOT_MESSAGE_TEMPLATES.update(
 BOT_STATIC_DIR = Path(__file__).resolve().parents[1] / "app" / "static"
 BOT_MESSAGES_IMAGES_DIR = BOT_STATIC_DIR / "bot_messages"
 BOT_MESSAGES_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+BOT_TICKETS_IMAGES_DIR = BOT_STATIC_DIR / "tickets"
+BOT_TICKETS_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+TICKET_TEMPLATE_IMAGE_PATH = BOT_MESSAGES_IMAGES_DIR / "without_qr_code.jpg"
+TICKET_TEXT_COLOR = (0x58, 0x2D, 0x15, 0xFF)
 
 # message_key -> источник фото:
 # - прямая ссылка: "https://example.com/image.jpg"
@@ -212,6 +217,73 @@ MESSAGE_PHOTO_SOURCES: dict[str, str] = {
     MESSAGE_KEY_TICKET_ALREADY_ACTIVATED: "ticket_activated.png",
     MESSAGE_KEY_TICKET_ANNULLED: "ticket_annulirovan.png",
 }
+
+
+def build_ticket_image_path(ticket_number: str) -> Path:
+    safe_ticket_number = re.sub(r"[^a-zA-Z0-9_-]", "_", ticket_number)
+    return BOT_TICKETS_IMAGES_DIR / f"{safe_ticket_number}.png"
+
+
+def pick_ticket_font(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    max_width: int,
+    max_height: int,
+) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    font_candidates = [
+        "arialbd.ttf",
+        "arial.ttf",
+        "DejaVuSans-Bold.ttf",
+        "DejaVuSans.ttf",
+    ]
+    min_side = min(max_width, max_height)
+    for size in range(max(16, min_side), 15, -2):
+        for candidate in font_candidates:
+            try:
+                font = ImageFont.truetype(candidate, size=size)
+            except OSError:
+                continue
+            text_bbox = draw.textbbox((0, 0), text=text, font=font)
+            text_width = text_bbox[2] - text_bbox[0]
+            text_height = text_bbox[3] - text_bbox[1]
+            if text_width <= max_width and text_height <= max_height:
+                return font
+    return ImageFont.load_default()
+
+
+def ensure_ticket_image(ticket_number: str) -> Path | None:
+    if not ticket_number:
+        return None
+
+    result_path = build_ticket_image_path(ticket_number)
+    if result_path.exists():
+        return result_path
+    if not TICKET_TEMPLATE_IMAGE_PATH.exists():
+        return None
+
+    with Image.open(TICKET_TEMPLATE_IMAGE_PATH).convert("RGBA") as template_image:
+        overlay = Image.new("RGBA", template_image.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+
+        text_area_width = int(template_image.width * 0.55)
+        text_area_height = int(template_image.height * 0.18)
+        font = pick_ticket_font(
+            draw=draw,
+            text=ticket_number,
+            max_width=text_area_width,
+            max_height=text_area_height,
+        )
+        bbox = draw.textbbox((0, 0), text=ticket_number, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        x = (template_image.width - text_width) // 2
+        y = (template_image.height - text_height) // 2
+        draw.text((x, y), ticket_number, fill=TICKET_TEXT_COLOR, font=font)
+
+        composed_image = Image.alpha_composite(template_image, overlay)
+        composed_image.save(result_path, format="PNG")
+
+    return result_path
 
 
 def render_bot_message(message_key: str, **context: str) -> str:
@@ -691,6 +763,8 @@ async def confirm_registration(callback: CallbackQuery, state: FSMContext) -> No
 
         ticket_number = visitor.ticket.ticket_number
 
+    ensure_ticket_image(ticket_number)
+
     await edit_navigation_message(
         callback,
         MESSAGE_KEY_REGISTRATION_SUCCESS,
@@ -725,12 +799,22 @@ async def show_my_ticket(callback: CallbackQuery) -> None:
 
         ticket_number = visitor.ticket.ticket_number
 
-    await edit_navigation_message(
-        callback,
-        MESSAGE_KEY_MY_TICKET,
+    ticket_image_path = ensure_ticket_image(ticket_number)
+    ticket_text = render_bot_message(MESSAGE_KEY_MY_TICKET, ticket_number=ticket_number)
+    if ticket_image_path is not None:
+        await callback.message.answer_photo(
+            photo=FSInputFile(str(ticket_image_path)),
+            caption=ticket_text,
+            reply_markup=build_ticket_keyboard(),
+        )
+        await callback.answer()
+        return
+
+    await callback.message.answer(
+        ticket_text,
         reply_markup=build_ticket_keyboard(),
-        ticket_number=ticket_number,
     )
+    await callback.answer()
 
 
 @router.callback_query(F.data == CALLBACK_ANNUL_TICKET)
