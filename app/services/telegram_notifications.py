@@ -1,10 +1,14 @@
 import logging
+from pathlib import Path
 
 from aiogram import Bot
+from aiogram.types import FSInputFile
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+BOT_MESSAGES_IMAGES_DIR = Path(__file__).resolve().parents[1] / "static" / "bot_messages"
+TICKET_ACTIVATED_IMAGE_PATH = BOT_MESSAGES_IMAGES_DIR / "ticket_activated.png"
 
 
 def build_ticket_activated_message(lottery_code: str) -> str:
@@ -27,10 +31,22 @@ async def notify_ticket_activated(telegram_id: int, lottery_code: str) -> None:
 
     bot = Bot(token=settings.bot_token)
     try:
-        await bot.send_message(
-            chat_id=telegram_id,
-            text=build_ticket_activated_message(lottery_code),
-        )
+        message_text = build_ticket_activated_message(lottery_code)
+        if TICKET_ACTIVATED_IMAGE_PATH.exists():
+            await bot.send_photo(
+                chat_id=telegram_id,
+                photo=FSInputFile(str(TICKET_ACTIVATED_IMAGE_PATH)),
+                caption=message_text,
+            )
+        else:
+            logger.warning(
+                "Activation image not found at %s, sending text-only notification.",
+                TICKET_ACTIVATED_IMAGE_PATH,
+            )
+            await bot.send_message(
+                chat_id=telegram_id,
+                text=message_text,
+            )
     except Exception as exc:
         logger.exception(
             "Failed to send activation notification to telegram_id=%s: %s",
