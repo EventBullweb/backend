@@ -3,13 +3,18 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.ticket import (
+    ProjectDetailedStatsResponse,
     TicketActivateRequest,
     TicketActivateResponse,
     TicketCheckinStatsResponse,
     TicketOwnerSchema,
 )
 from app.services.telegram_notifications import notify_ticket_activated
-from app.services.tickets import activate_ticket, get_checkin_stats
+from app.services.tickets import (
+    activate_ticket,
+    get_checkin_stats,
+    get_project_detailed_stats,
+)
 
 router = APIRouter()
 
@@ -74,3 +79,14 @@ async def checkin_stats_endpoint(
         expected=expected,
         already_activated=already_activated,
     )
+
+
+@router.get(
+    "/stats/project-detailed",
+    tags=["stats"],
+    response_model=ProjectDetailedStatsResponse,
+)
+async def project_detailed_stats_endpoint(
+    db: Session = Depends(get_db),
+) -> ProjectDetailedStatsResponse:
+    return ProjectDetailedStatsResponse(**get_project_detailed_stats(db=db))
