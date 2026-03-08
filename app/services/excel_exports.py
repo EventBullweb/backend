@@ -7,6 +7,45 @@ from sqlalchemy.orm import Session
 from app.models import Ticket, Visitor, VisitorAnswer
 from app.services.tickets import get_project_detailed_stats
 
+TOTALS_LABELS = {
+    "visitors": "Всего пользователей",
+    "registrations_completed": "Завершили регистрацию",
+    "tickets": "Выдано билетов",
+    "activated_tickets": "Активировано билетов",
+    "visitor_answers": "Всего ответов",
+    "broadcast_deliveries": "Всего доставок рассылок",
+}
+
+FUNNEL_LABELS = {
+    "visitors_total": "Пользователи всего",
+    "registrations_completed": "Регистрация завершена",
+    "tickets_issued": "Билеты выданы",
+    "tickets_activated": "Билеты активированы",
+    "registration_completion_rate": "Конверсия завершения регистрации (%)",
+    "ticket_issue_rate_from_completed": "Конверсия выдачи билета из завершивших (%)",
+    "ticket_activation_rate_from_issued": "Конверсия активации из выданных (%)",
+    "ticket_activation_rate_from_visitors": "Конверсия активации из всех пользователей (%)",
+}
+
+TICKETS_LABELS = {
+    "expected": "Выдано билетов",
+    "already_activated": "Активировано билетов",
+    "not_activated": "Не активировано билетов",
+    "with_lottery_code": "С лотерейным кодом",
+    "without_lottery_code": "Без лотерейного кода",
+}
+
+ANSWERS_LABELS = {
+    "total_answers": "Всего ответов",
+    "unique_respondents": "Уникальных ответивших",
+    "average_answers_per_respondent": "Среднее число ответов на пользователя",
+}
+
+BROADCAST_LABELS = {
+    "total_deliveries": "Всего доставок",
+    "unique_recipients": "Уникальных получателей",
+}
+
 
 def _fit_columns(sheet) -> None:
     for column in sheet.columns:
@@ -28,13 +67,18 @@ def build_lottery_tickets_excel(db: Session) -> bytes:
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "Лотерейные билеты"
-    sheet.append(["Номер лотерейного билета"])
+    sheet.append(["Лотерейный код"])
 
-    ticket_numbers = db.scalars(
-        select(Ticket.ticket_number).order_by(Ticket.created_at.asc())
+    lottery_codes = db.scalars(
+        select(Ticket.lottery_code)
+        .where(
+            Ticket.lottery_code.is_not(None),
+            Ticket.lottery_code != "",
+        )
+        .order_by(Ticket.created_at.asc())
     ).all()
-    for ticket_number in ticket_numbers:
-        sheet.append([ticket_number])
+    for lottery_code in lottery_codes:
+        sheet.append([lottery_code])
 
     _fit_columns(sheet)
 
@@ -52,17 +96,17 @@ def build_analytics_excel(db: Session) -> bytes:
     summary_sheet.append(["Раздел", "Показатель", "Значение"])
 
     for key, value in stats["totals"].items():
-        summary_sheet.append(["Итого", key, value])
+        summary_sheet.append(["Итого", TOTALS_LABELS.get(key, key), value])
     for key, value in stats["funnel"].items():
-        summary_sheet.append(["Воронка", key, value])
+        summary_sheet.append(["Воронка", FUNNEL_LABELS.get(key, key), value])
     for key, value in stats["tickets"].items():
-        summary_sheet.append(["Билеты", key, value])
+        summary_sheet.append(["Билеты", TICKETS_LABELS.get(key, key), value])
     for key, value in stats["answers"].items():
         if key == "top_steps":
             continue
-        summary_sheet.append(["Ответы", key, value])
+        summary_sheet.append(["Ответы", ANSWERS_LABELS.get(key, key), value])
     for key, value in stats["broadcast"].items():
-        summary_sheet.append(["Рассылки", key, value])
+        summary_sheet.append(["Рассылки", BROADCAST_LABELS.get(key, key), value])
 
     summary_sheet.append([])
     summary_sheet.append(["Топ шагов", "Ключ шага", "Название шага", "Ответов", "Уникальных пользователей"])
@@ -82,8 +126,8 @@ def build_analytics_excel(db: Session) -> bytes:
     visitors_sheet.append(
         [
             "ID пользователя",
-            "Telegram ID",
-            "Username",
+            "Телеграм ID",
+            "Имя пользователя",
             "Полное имя",
             "Регистрация завершена",
             "Дата создания",
