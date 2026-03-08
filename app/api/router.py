@@ -1,4 +1,7 @@
+from io import BytesIO
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -10,6 +13,10 @@ from app.schemas.ticket import (
     TicketOwnerSchema,
 )
 from app.services.telegram_notifications import notify_ticket_activated
+from app.services.excel_exports import (
+    build_analytics_excel,
+    build_lottery_tickets_excel,
+)
 from app.services.tickets import (
     activate_ticket,
     get_checkin_stats,
@@ -90,3 +97,35 @@ async def project_detailed_stats_endpoint(
     db: Session = Depends(get_db),
 ) -> ProjectDetailedStatsResponse:
     return ProjectDetailedStatsResponse(**get_project_detailed_stats(db=db))
+
+
+@router.get("/eksport/lotereynye-bilety", tags=["экспорт"])
+async def export_lottery_tickets_endpoint(
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    payload = build_lottery_tickets_excel(db=db)
+    return StreamingResponse(
+        BytesIO(payload),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition": (
+                'attachment; filename="lotereynye_bilety.xlsx"'
+            )
+        },
+    )
+
+
+@router.get("/eksport/analitika", tags=["экспорт"])
+async def export_analytics_endpoint(
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    payload = build_analytics_excel(db=db)
+    return StreamingResponse(
+        BytesIO(payload),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={"Content-Disposition": 'attachment; filename="analitika.xlsx"'},
+    )
