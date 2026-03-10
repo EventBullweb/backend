@@ -420,7 +420,7 @@ def build_main_menu_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="ПАРТНЁРЫ",
+                    text="ПАРТНЁРЫ МЕРОПРИЯТИЯ",
                     callback_data=CALLBACK_SHOW_PARTNERS,
                 )
             ],
