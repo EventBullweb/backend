@@ -49,6 +49,7 @@ CALLBACK_SHOW_REGISTRATION_INFO = "registration:show-info"
 CALLBACK_START_REGISTRATION = "registration:start"
 CALLBACK_SHOW_MY_TICKET = "menu:my-ticket"
 CALLBACK_SHOW_EVENT_PROGRAM = "menu:event-program"
+CALLBACK_SHOW_PARTNERS = "menu:partners"
 CALLBACK_CONTACT_ORGANIZER = "menu:contact-organizer"
 CALLBACK_ANNUL_TICKET = "ticket:annul"
 CALLBACK_BACK_TO_MAIN_MENU = "menu:back"
@@ -82,7 +83,7 @@ REGISTRATION_SUCCESS_TEXT = (
     'Персональный QR в разделе "мой билет" 👇'
 )
 
-EVENT_PROGRAM_TEXT = (
+PARTNERS_TEXT = (
     "Организатор:\n\n"
     "Партнеры:\n\n"
     "1. Papa Moscow Club (https://clck.ru/3STemX)\n\n"
@@ -99,10 +100,37 @@ EVENT_PROGRAM_TEXT = (
     "11. Разработка программного обеспечения Bullweb (http://www.bullweb.ru/)"
 )
 
+EVENT_PROGRAM_TEXT = (
+    "⭐️Закрытый клиентский ивент от агентства «Show & Circus» соберет 200 гостей 16 марта 2026 года в Москве.\n\n"
+    "⭐️Локация: Papa Moscow Club\n"
+    "⭐️Дата/время:  16.03, 18:00-23:00\n"
+    "⭐️Концепция ивента: Драгоценные камни - каждый Гость, как драгоценность.\n"
+    "Количество гостей: 200 человек\n"
+    "⭐️Контингент: владельцы  ивент-агентств Москвы, Санкт-Петербурга, Казани, Дубай. Организаторы мероприятий, режиссеры, собственники бизнеса из числа наших клиентов.\n"
+    "⭐️Программа: тренды 2026 в show-production, catering, alcohol production, welcome, decor, location for event concerts and top music.\n\n"
+    "Примерная программа мероприятия\n"
+    "18:00 — Сбор гостей и welcome\n"
+    "Гостей встречают организаторы и партнёры мероприятия. Welcome-зона, общение, знакомство участников, первые активности и фотозона.\n"
+    "18:30 — Открытие вечера\n"
+    "Приветственное слово организаторов Show & Circus. Краткое представление партнёров и концепции вечера «Драгоценные камни».\n"
+    "19:00 — Тренды 2026 в индустрии мероприятий\n"
+    "Короткие выступления и презентации от партнёров о новых форматах show-production, catering, alcohol production, декоре и event-локациях.\n"
+    "20:00 — Шоу-программа\n"
+    "Выступления артистов и шоу-номера от партнеров мероприятия. Музыкальная программа и сценические постановки.\n"
+    "21:00 — Розыгрыш призов от партнеров\n"
+    "Среди гостей, присутствующих на мероприятии, пройдет розыгрыш подарков и специальных предложений.\n"
+    "21:30 — Нетворкинг и свободное общение\n"
+    "Общение гостей, новые знакомства, обсуждение проектов и идей в неформальной атмосфере.\n"
+    "22:30 — Финальная шоу-программа\n"
+    "Музыкальное выступление и завершение официальной части вечера.\n"
+    "23:00 — Завершение мероприятия"
+)
+
 MESSAGE_KEY_INTRO = "intro"
 MESSAGE_KEY_REGISTRATION_INFO = "registration_info"
 MESSAGE_KEY_REGISTRATION_SUCCESS = "registration_success"
 MESSAGE_KEY_EVENT_PROGRAM = "event_program"
+MESSAGE_KEY_PARTNERS = "partners"
 MESSAGE_KEY_ALREADY_REGISTERED = "already_registered"
 MESSAGE_KEY_START_REGISTRATION = "start_registration"
 MESSAGE_KEY_CONTACT_READ_FAILED = "contact_read_failed"
@@ -133,6 +161,7 @@ BOT_MESSAGE_TEMPLATES = {
     MESSAGE_KEY_REGISTRATION_INFO: REGISTRATION_INFO_TEXT,
     MESSAGE_KEY_REGISTRATION_SUCCESS: REGISTRATION_SUCCESS_TEXT,
     MESSAGE_KEY_EVENT_PROGRAM: EVENT_PROGRAM_TEXT,
+    MESSAGE_KEY_PARTNERS: PARTNERS_TEXT,
     MESSAGE_KEY_ALREADY_REGISTERED: (
         "Вы уже зарегистрированы. Ваш билет №{ticket_number}."
     ),
@@ -221,6 +250,8 @@ MESSAGE_PHOTO_SOURCES: dict[str, str] = {
     MESSAGE_KEY_REGISTRATION_SUCCESS: "registration_success.png",
     MESSAGE_KEY_MAIN_MENU: "main_menu.png",
     MESSAGE_KEY_EVENT_PROGRAM: "programma_of_event.png",
+    MESSAGE_KEY_PARTNERS: "partners.png",
+    MESSAGE_KEY_CONTACT_ORGANIZER: "contacts.png",
     MESSAGE_KEY_TICKET_ALREADY_ACTIVATED: "ticket_activated.png",
     MESSAGE_KEY_TICKET_ANNULLED: "ticket_annulirovan.png",
 }
@@ -385,6 +416,12 @@ def build_main_menu_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="ПРОГРАММА МЕРОПРИЯТИЯ",
                     callback_data=CALLBACK_SHOW_EVENT_PROGRAM,
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="ПАРТНЁРЫ",
+                    callback_data=CALLBACK_SHOW_PARTNERS,
                 )
             ],
             [
@@ -812,6 +849,15 @@ async def show_event_program(callback: CallbackQuery) -> None:
     await edit_navigation_message(
         callback,
         MESSAGE_KEY_EVENT_PROGRAM,
+        reply_markup=build_back_to_main_menu_keyboard(),
+    )
+
+
+@router.callback_query(F.data == CALLBACK_SHOW_PARTNERS)
+async def show_partners(callback: CallbackQuery) -> None:
+    await edit_navigation_message(
+        callback,
+        MESSAGE_KEY_PARTNERS,
         reply_markup=build_back_to_main_menu_keyboard(),
     )
 
