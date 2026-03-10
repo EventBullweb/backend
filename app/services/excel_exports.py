@@ -1,49 +1,22 @@
 from io import BytesIO
 
 from openpyxl import Workbook
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, joinedload
 
 from app.models import Ticket, Visitor, VisitorAnswer
-from app.services.tickets import get_project_analytics_for_excel
+from app.services.tickets import get_project_detailed_stats
 
-TOTALS_LABELS = {
-    "visitors": "Всего пользователей",
-    "registrations_completed": "Завершили регистрацию",
-    "tickets": "Выдано билетов",
-    "activated_tickets": "Активировано билетов",
-    "visitor_answers": "Всего ответов",
-    "broadcast_deliveries": "Всего доставок рассылок",
-}
-
-FUNNEL_LABELS = {
-    "visitors_total": "Пользователи всего",
-    "registrations_completed": "Регистрация завершена",
-    "tickets_issued": "Билеты выданы",
-    "tickets_activated": "Билеты активированы",
-    "registration_completion_rate": "Конверсия завершения регистрации (%)",
-    "ticket_issue_rate_from_completed": "Конверсия выдачи билета из завершивших (%)",
-    "ticket_activation_rate_from_issued": "Конверсия активации из выданных (%)",
-    "ticket_activation_rate_from_visitors": "Конверсия активации из всех пользователей (%)",
-}
-
-TICKETS_LABELS = {
-    "expected": "Выдано билетов",
-    "already_activated": "Активировано билетов",
-    "not_activated": "Не активировано билетов",
-    "with_lottery_code": "С лотерейным кодом",
-    "without_lottery_code": "Без лотерейного кода",
-}
-
-ANSWERS_LABELS = {
-    "total_answers": "Всего ответов",
-    "unique_respondents": "Уникальных ответивших",
-    "average_answers_per_respondent": "Среднее число ответов на пользователя",
-}
-
-BROADCAST_LABELS = {
-    "total_deliveries": "Всего доставок",
-    "unique_recipients": "Уникальных получателей",
+FUNNEL_FIELD_LABELS = {
+    "started_bot": "Нажали Start в боте",
+    "started_registration": "Начали регистрацию (отправили имя)",
+    "left_contact": "Ввели номер телефона",
+    "registration_completed": "Завершили регистрацию",
+    "tickets_issued": "Выдано билетов",
+    "opened_my_ticket": "Открыли раздел «Мой билет»",
+    "tickets_annulled": "Аннулировано билетов",
+    "attended_qr_scan": "Пришли на мероприятие (QR отсканирован)",
+    "lottery_participants": "Участники розыгрыша",
 }
 
 
@@ -87,173 +60,71 @@ def build_lottery_tickets_excel(db: Session) -> bytes:
     return output.getvalue()
 
 
+def _funnel_status_for_visitor(visitor: Visitor) -> str:
+    """Определяет статус пользователя в воронке по данным Visitor и связанного Ticket."""
+    if visitor.ticket is None:
+        if visitor.is_registration_completed:
+            return "Билет аннулирован"
+        return "Регистрация не завершена"
+    t = visitor.ticket
+    if t.is_activated and t.lottery_code:
+        return "Пришёл на мероприятие (QR), участник розыгрыша"
+    if t.is_activated:
+        return "Пришёл на мероприятие (QR)"
+    return "Билет выдан"
+
+
 def build_analytics_excel(db: Session) -> bytes:
     workbook = Workbook()
 
-    summary_sheet = workbook.active
-    summary_sheet.title = "Сводная аналитика"
-    stats = get_project_analytics_for_excel(db=db)
-    summary_sheet.append(["Раздел", "Показатель", "Значение"])
+    funnel_sheet = workbook.active
+    funnel_sheet.title = "Воронка"
+    stats = get_project_detailed_stats(db=db)
+    funnel_sheet.append(["Показатель", "Значение"])
+    for key, label in FUNNEL_FIELD_LABELS.items():
+        funnel_sheet.append([label, stats.get(key, 0)])
+    _fit_columns(funnel_sheet)
 
-    for key, value in stats["totals"].items():
-        summary_sheet.append(["Итого", TOTALS_LABELS.get(key, key), value])
-    for key, value in stats["funnel"].items():
-        summary_sheet.append(["Воронка", FUNNEL_LABELS.get(key, key), value])
-    for key, value in stats["tickets"].items():
-        summary_sheet.append(["Билеты", TICKETS_LABELS.get(key, key), value])
-    for key, value in stats["answers"].items():
-        if key == "top_steps":
-            continue
-        summary_sheet.append(["Ответы", ANSWERS_LABELS.get(key, key), value])
-    for key, value in stats["broadcast"].items():
-        summary_sheet.append(["Рассылки", BROADCAST_LABELS.get(key, key), value])
-
-    summary_sheet.append([])
-    summary_sheet.append(["Топ шагов", "Ключ шага", "Название шага", "Ответов", "Уникальных пользователей"])
-    for step in stats["answers"]["top_steps"]:
-        summary_sheet.append(
-            [
-                "Топ шагов",
-                step["step_key"],
-                step["step_label"],
-                step["answers_count"],
-                step["unique_visitors"],
-            ]
-        )
-    _fit_columns(summary_sheet)
-
-    visitors_sheet = workbook.create_sheet("Пользователи")
-    visitors_sheet.append(
+    users_sheet = workbook.create_sheet("Пользователи по статусу")
+    users_sheet.append(
         [
-            "ID пользователя",
             "Телеграм ID",
             "Имя пользователя",
             "Полное имя",
-            "Регистрация завершена",
-            "Дата создания",
-            "Дата обновления",
+            "Статус в воронке",
             "Номер билета",
             "Лотерейный код",
             "Билет активирован",
             "Дата активации билета",
-            "Количество ответов",
+            "Дата создания",
+            "Дата обновления",
         ]
     )
 
-    visitors_rows = db.execute(
-        select(
-            Visitor.id,
-            Visitor.telegram_id,
-            Visitor.username,
-            Visitor.full_name,
-            Visitor.is_registration_completed,
-            Visitor.created_at,
-            Visitor.updated_at,
-            Ticket.ticket_number,
-            Ticket.lottery_code,
-            Ticket.is_activated,
-            Ticket.activated_at,
-            func.count(VisitorAnswer.id).label("answers_count"),
-        )
-        .outerjoin(Ticket, Ticket.visitor_id == Visitor.id)
-        .outerjoin(VisitorAnswer, VisitorAnswer.visitor_id == Visitor.id)
-        .group_by(
-            Visitor.id,
-            Visitor.telegram_id,
-            Visitor.username,
-            Visitor.full_name,
-            Visitor.is_registration_completed,
-            Visitor.created_at,
-            Visitor.updated_at,
-            Ticket.ticket_number,
-            Ticket.lottery_code,
-            Ticket.is_activated,
-            Ticket.activated_at,
-        )
+    visitors_with_tickets = db.scalars(
+        select(Visitor)
+        .options(joinedload(Visitor.ticket))
         .order_by(Visitor.created_at.asc())
     ).all()
 
-    for row in visitors_rows:
-        visitors_sheet.append(
+    for visitor in visitors_with_tickets:
+        ticket = visitor.ticket
+        status = _funnel_status_for_visitor(visitor)
+        users_sheet.append(
             [
-                row.id,
-                row.telegram_id,
-                row.username or "",
-                row.full_name or "",
-                "Да" if row.is_registration_completed else "Нет",
-                _format_datetime(row.created_at),
-                _format_datetime(row.updated_at),
-                row.ticket_number or "",
-                row.lottery_code or "",
-                "Да" if row.is_activated else "Нет",
-                _format_datetime(row.activated_at),
-                row.answers_count,
+                visitor.telegram_id,
+                visitor.username or "",
+                visitor.full_name or "",
+                status,
+                ticket.ticket_number if ticket else "",
+                ticket.lottery_code if ticket else "",
+                "Да" if ticket and ticket.is_activated else "Нет",
+                _format_datetime(ticket.activated_at) if ticket else "",
+                _format_datetime(visitor.created_at),
+                _format_datetime(visitor.updated_at),
             ]
         )
-    _fit_columns(visitors_sheet)
-
-    tickets_sheet = workbook.create_sheet("Билеты")
-    tickets_sheet.append(
-        [
-            "ID билета",
-            "ID пользователя",
-            "Номер билета",
-            "Лотерейный код",
-            "Билет активирован",
-            "Дата активации",
-            "Дата создания",
-            "Дата обновления",
-        ]
-    )
-
-    tickets_rows = db.execute(select(Ticket).order_by(Ticket.created_at.asc())).scalars().all()
-    for ticket in tickets_rows:
-        tickets_sheet.append(
-            [
-                ticket.id,
-                ticket.visitor_id,
-                ticket.ticket_number,
-                ticket.lottery_code or "",
-                "Да" if ticket.is_activated else "Нет",
-                _format_datetime(ticket.activated_at),
-                _format_datetime(ticket.created_at),
-                _format_datetime(ticket.updated_at),
-            ]
-        )
-    _fit_columns(tickets_sheet)
-
-    answers_sheet = workbook.create_sheet("Ответы пользователей")
-    answers_sheet.append(
-        [
-            "ID ответа",
-            "ID пользователя",
-            "Ключ шага",
-            "Название шага",
-            "Ответ",
-            "Дата создания",
-            "Дата обновления",
-        ]
-    )
-
-    answers_rows = db.execute(
-        select(VisitorAnswer).order_by(
-            VisitorAnswer.visitor_id.asc(),
-            VisitorAnswer.created_at.asc(),
-        )
-    ).scalars().all()
-    for answer in answers_rows:
-        answers_sheet.append(
-            [
-                answer.id,
-                answer.visitor_id,
-                answer.step_key,
-                answer.step_label,
-                answer.value,
-                _format_datetime(answer.created_at),
-                _format_datetime(answer.updated_at),
-            ]
-        )
-    _fit_columns(answers_sheet)
+    _fit_columns(users_sheet)
 
     output = BytesIO()
     workbook.save(output)
