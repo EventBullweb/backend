@@ -489,8 +489,13 @@ async def ask_next_step(message: Message, state: FSMContext) -> None:
         await send_bot_message(
             message,
             MESSAGE_KEY_REGISTRATION_SUCCESS,
-            reply_markup=build_main_menu_keyboard(),
+            reply_markup=ReplyKeyboardRemove(),
             ticket_number=ticket_number,
+        )
+        await send_bot_message(
+            message,
+            MESSAGE_KEY_MAIN_MENU,
+            reply_markup=build_main_menu_keyboard(),
         )
         await state.clear()
         return
