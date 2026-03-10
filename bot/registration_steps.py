@@ -13,20 +13,14 @@ REGISTRATION_STEPS = [
     RegistrationStep(
         key="full_name",
         label="Фамилия и имя",
-        prompt="""Начинаем регистрацию.
-Напишите фамилию и имя:""",
-        required=True,
-    ),
-    RegistrationStep(
-        key="organization",
-        label="Название организации",
-        prompt="""Укажите название организации:""",
-        required=True,
-    ),
-    RegistrationStep(
-        key="position",
-        label="Должность или занимаемый пост",
-        prompt="""Укажите должность или занимаемый пост:""",
+        prompt="""Для регистрации
+
+Напишите Ваше:
+1. фамилию и имя 
+2. название организации  
+3. должность или занимаемый пост 
+
+просто текстом ниже 👇""",
         required=True,
     ),
     RegistrationStep(
