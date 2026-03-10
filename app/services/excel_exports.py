@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Ticket, Visitor, VisitorAnswer
-from app.services.tickets import get_project_detailed_stats
+from app.services.tickets import get_project_analytics_for_excel
 
 TOTALS_LABELS = {
     "visitors": "Всего пользователей",
@@ -92,7 +92,7 @@ def build_analytics_excel(db: Session) -> bytes:
 
     summary_sheet = workbook.active
     summary_sheet.title = "Сводная аналитика"
-    stats = get_project_detailed_stats(db=db)
+    stats = get_project_analytics_for_excel(db=db)
     summary_sheet.append(["Раздел", "Показатель", "Значение"])
 
     for key, value in stats["totals"].items():

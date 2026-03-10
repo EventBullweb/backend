@@ -41,6 +41,62 @@ def _safe_rate(numerator: int, denominator: int) -> float:
 
 
 def get_project_detailed_stats(db: Session) -> dict:
+    """Возвращает плоский объект воронки для API: 9 целочисленных счётчиков."""
+    started_bot = db.scalar(select(func.count(Visitor.id))) or 0
+    started_registration = (
+        db.scalar(
+            select(func.count(func.distinct(VisitorAnswer.visitor_id))).where(
+                VisitorAnswer.step_key == "full_name"
+            )
+        )
+        or 0
+    )
+    left_contact = (
+        db.scalar(
+            select(func.count(func.distinct(VisitorAnswer.visitor_id))).where(
+                VisitorAnswer.step_key == "phone"
+            )
+        )
+        or 0
+    )
+    registration_completed = (
+        db.scalar(
+            select(func.count(Visitor.id)).where(
+                Visitor.is_registration_completed.is_(True)
+            )
+        )
+        or 0
+    )
+    tickets_issued = db.scalar(select(func.count(Ticket.id))) or 0
+    opened_my_ticket = 0  # в БД не логируется
+    tickets_annulled = 0  # при аннулировании билет удаляется, истории нет
+    attended_qr_scan = (
+        db.scalar(
+            select(func.count(Ticket.id)).where(Ticket.is_activated.is_(True))
+        )
+        or 0
+    )
+    lottery_participants = (
+        db.scalar(
+            select(func.count(Ticket.id)).where(Ticket.lottery_code.is_not(None))
+        )
+        or 0
+    )
+    return {
+        "started_bot": started_bot,
+        "started_registration": started_registration,
+        "left_contact": left_contact,
+        "registration_completed": registration_completed,
+        "tickets_issued": tickets_issued,
+        "opened_my_ticket": opened_my_ticket,
+        "tickets_annulled": tickets_annulled,
+        "attended_qr_scan": attended_qr_scan,
+        "lottery_participants": lottery_participants,
+    }
+
+
+def get_project_analytics_for_excel(db: Session) -> dict:
+    """Расширенная аналитика для экспорта в Excel (totals, funnel, tickets, answers, broadcast)."""
     visitors_total = db.scalar(select(func.count(Visitor.id))) or 0
     registrations_completed = (
         db.scalar(

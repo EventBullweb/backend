@@ -77,6 +77,22 @@ class EntityTotalsSchema(BaseModel):
 
 
 class ProjectDetailedStatsResponse(BaseModel):
+    """Один объект воронки для GET /api/v1/stats/project-detailed. Все поля — целые счётчики."""
+
+    started_bot: int = 0
+    started_registration: int = 0
+    left_contact: int = 0
+    registration_completed: int = 0
+    tickets_issued: int = 0
+    opened_my_ticket: int = 0
+    tickets_annulled: int = 0
+    attended_qr_scan: int = 0
+    lottery_participants: int = 0
+
+
+class ProjectDetailedStatsResponseLegacy(BaseModel):
+    """Расширенная структура для экспорта в Excel (totals, funnel, tickets, answers, broadcast)."""
+
     totals: EntityTotalsSchema
     funnel: StatsFunnelSchema
     tickets: TicketStatsDetailsSchema
