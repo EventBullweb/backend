@@ -60,8 +60,8 @@ INTRO_TEXT = (
     "Закрытое мероприятие от ивент агентства «Show & Circus».\n"
     "мы собираем в Москве 200 гостей из индустрии событий!\n\n"
     "Локация: Papa Moscow Club\n"
-    "Адрес:\n"
-    "Дата и время: 16 марта, 18:00–23:00\n\n"
+    "Адрес: 1-ая Брестская, 2 стр. 3, Moscow, Russia\n"
+    "Дата и время: 16 марта, \n18:00–23:00\n\n"
 )
 
 REGISTRATION_INFO_TEXT = (
@@ -85,19 +85,18 @@ REGISTRATION_SUCCESS_TEXT = (
 EVENT_PROGRAM_TEXT = (
     "Организатор:\n\n"
     "Партнеры:\n\n"
-    "1. Papa Moscow Club  https://www.instagram.com/papamoscow.ru/\n\n"
-    "Новый балет - руководитель компании и режиссер ивента Екатерина Черных\n"
-    "https://www.instagram.com/new_ballet__experience?igsh=MTVzdXhta3J0dm5nMQ%3D%3D&utm_source=qr\n\n"
-    "Кейтеринговая компания Modul catering  https://www.instagram.com/modul_catering?igsh=MWpoejA3bnMycXFiZA==\n\n"
-    "https://modulcatering.ru/\n\n"
-    "Креативный директор Артемий Фогель: https://www.instagram.com/artemiyfogel?igsh=MWpxM2huc2hqcjMxNg==\n\n"
-    "Алкогольная компания «AST\": https://www.ast-inter.ru/\n\n"
-    "Шоу-балет \"G-style\" https://www.instagram.com/g_style_show?igsh=cXljY3BhdDIzbDlp\n\n"
-    "Фламенко 💃\n"
-    "https://www.instagram.com/flamenco_capriccios?igsh=NW1ic2tzM3dvZ245\n\n"
-    "Продакшн:\n"
-    "- Видеограф Дима https://www.instagram.com/dimaalucky?igsh=Z2VuYnVvY21ta20=\n\n"
-    "- Рилсмейкер Настя https://www.instagram.com/imonvacationnn?igsh=MWR3cmM0NjRpbGdnNw=="
+    "1. Papa Moscow Club (https://clck.ru/3STemX)\n\n"
+    "2. Новый балет - руководитель компании и режиссер ивента Екатерина Черных (https://clck.ru/3STepM)\n\n"
+    "3. Кейтеринговая компания Modul catering   (https://clck.ru/3STetU)\n"
+    "3.1. https://modulcatering.ru/\n\n"
+    "4. Креативный директор Артемий Фогель (http://clck.ru/3STevE)\n\n"
+    "5. Алкогольная компания «AST\" (https://www.ast-inter.ru/)\n\n"
+    "6. Шоу-балет \"G-style\"  (http://clck.ru/3STewk)\n\n"
+    "7. Фламенко (http://clck.ru/3STexT) 💃\n\n"
+    "8. Продакшн: видеограф Дима (http://clck.ru/3STeyF)\n\n"
+    "9. Рилсмейкер Настя (http://clck.ru/3STeyw)\n\n"
+    "10. Внедрение AI - Загоскин Александр (https://ai-resheniya.pro/)\n\n"
+    "11. Разработка программного обеспечения Bullweb (http://www.bullweb.ru/)"
 )
 
 MESSAGE_KEY_INTRO = "intro"
