@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -8,9 +8,6 @@ from app.db.base import Base
 
 class VisitorAnswer(Base):
     __tablename__ = "visitor_answers"
-    __table_args__ = (
-        UniqueConstraint("visitor_id", "step_key", name="uq_visitor_answer_step"),
-    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     visitor_id: Mapped[int] = mapped_column(
