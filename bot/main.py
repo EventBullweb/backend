@@ -524,15 +524,13 @@ async def ask_next_step(message: Message, state: FSMContext) -> None:
         )
         ensure_ticket_image(ticket_number)
         await send_bot_message(
-            message,
-            MESSAGE_KEY_REGISTRATION_SUCCESS,
-            reply_markup=ReplyKeyboardRemove(),
-            ticket_number=ticket_number,
+            reply_markup=ReplyKeyboardRemove()
         )
         await send_bot_message(
             message,
-            MESSAGE_KEY_MAIN_MENU,
+            MESSAGE_KEY_REGISTRATION_SUCCESS,
             reply_markup=build_main_menu_keyboard(),
+            ticket_number=ticket_number,
         )
         await state.clear()
         return
