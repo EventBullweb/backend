@@ -12,15 +12,27 @@ class RegistrationStep:
 REGISTRATION_STEPS = [
     RegistrationStep(
         key="full_name",
-        label="Имя",
+        label="Фамилия и имя",
         prompt="""Начинаем регистрацию.
-Напишите Ваше имя:""",
+Напишите фамилию и имя:""",
+        required=True,
+    ),
+    RegistrationStep(
+        key="organization",
+        label="Название организации",
+        prompt="""Укажите название организации:""",
+        required=True,
+    ),
+    RegistrationStep(
+        key="position",
+        label="Должность или занимаемый пост",
+        prompt="""Укажите должность или занимаемый пост:""",
         required=True,
     ),
     RegistrationStep(
         key="phone",
-        label="Номер телефона",
-        prompt="""Финальное действие в регистрации и вы получаете билет 👇нажмите кнопку 'Отправить контакт'""",
+        label="Контакт",
+        prompt="""Финальное действие в регистрации: нажмите кнопку 'Отправить контакт'.""",
         required=True,
     ),
 ]

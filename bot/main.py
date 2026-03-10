@@ -32,7 +32,10 @@ from app.services.channel_broadcast import (
     has_source_deliveries,
     remove_source_deliveries,
 )
-from app.services.ticket_numbers import generate_ticket_number
+from app.services.ticket_numbers import (
+    generate_ticket_number,
+    is_ticket_number_in_current_format,
+)
 from bot.registration_steps import REGISTRATION_STEPS
 
 router = Router()
@@ -53,12 +56,12 @@ DELETE_BROADCAST_COMMAND = "/sync_delete"
 DELETE_BROADCAST_MARKER = "#удалить"
 
 INTRO_TEXT = (
-    "Давай добавим деталей!\n\n"
-    "Закрытое мероприятие от ивент-агентства Show & Circus.\n"
-    "Мы собираем в Москве 200 гостей из индустрии событий.\n\n"
+    "Регистрация на мероприятие👇\n\n"
+    "Закрытое мероприятие от ивент агентства «Show & Circus».\n"
+    "мы собираем в Москве 200 гостей из индустрии событий!\n\n"
     "Локация: Papa Moscow Club\n"
-    "Дата и время: 16 марта, 18:00-23:00\n\n"
-    "Вход на мероприятие по спискам. Количество мест ограничено."
+    "Адрес:\n"
+    "Дата и время: 16 марта, 18:00–23:00\n\n"
 )
 
 REGISTRATION_INFO_TEXT = (
@@ -72,22 +75,37 @@ REGISTRATION_INFO_TEXT = (
 )
 
 REGISTRATION_SUCCESS_TEXT = (
-    "Поздравляем, вы успешно прошли регистрацию!\n\n"
-    "За вами забронировано место на закрытом мероприятии Show & Circus.\n"
-    "Ваш персональный билет уже сформирован.\n"
-    "Получить его можно в меню ниже - просто откройте раздел Мой билет."
+    "Регистрация прошла успешно!\n\n"
+    "Ваш билет 🎫\n"
+    "Номер {ticket_number}\n\n"
+    "За вами забронировано место!\n\n"
+    'Персональный QR в разделе "мой билет" 👇'
 )
 
 EVENT_PROGRAM_TEXT = (
-    "Примерная программа мероприятия\n\n"
-    "18:00 - Сбор гостей и welcome\n"
-    "18:30 - Открытие вечера\n"
-    "19:00 - Тренды 2026 в индустрии мероприятий\n"
-    "20:00 - Шоу-программа\n"
-    "21:00 - Розыгрыш призов от партнеров\n"
-    "21:30 - Нетворкинг и свободное общение\n"
-    "22:30 - Финальная шоу-программа\n"
-    "23:00 - Завершение мероприятия"
+    "⭐️Закрытый клиентский ивент от агентства «Show & Circus» соберет 200 гостей 16 марта 2026 года в Москве.\n\n"
+    "⭐️Локация: Papa Moscow Club\n"
+    "⭐️Дата/время:  16.03, 18:00-23:00\n"
+    "⭐️Концепция ивента: Драгоценные камни - каждый Гость, как драгоценность.\n"
+    "Количество гостей: 200 человек\n"
+    "⭐️Контингент: владельцы  ивент-агентств Москвы, Санкт-Петербурга, Казани, Дубай. Организаторы мероприятий, режиссеры, собственники бизнеса из числа наших клиентов.\n"
+    "⭐️Программа: тренды 2026 в show-production, catering, alcohol production, welcome, decor, location for event concerts and top music.\n\n"
+    "Примерная программа мероприятия\n"
+    "18:00 — Сбор гостей и welcome\n"
+    "Гостей встречают организаторы и партнёры мероприятия. Welcome-зона, общение, знакомство участников, первые активности и фотозона.\n"
+    "18:30 — Открытие вечера\n"
+    "Приветственное слово организаторов Show & Circus. Краткое представление партнёров и концепции вечера «Драгоценные камни».\n"
+    "19:00 — Тренды 2026 в индустрии мероприятий\n"
+    "Короткие выступления и презентации от партнёров о новых форматах show-production, catering, alcohol production, декоре и event-локациях.\n"
+    "20:00 — Шоу-программа\n"
+    "Выступления артистов и шоу-номера от партнеров мероприятия. Музыкальная программа и сценические постановки.\n"
+    "21:00 — Розыгрыш призов от партнеров\n"
+    "Среди гостей, присутствующих на мероприятии, пройдет розыгрыш подарков и специальных предложений.\n"
+    "21:30 — Нетворкинг и свободное общение\n"
+    "Общение гостей, новые знакомства, обсуждение проектов и идей в неформальной атмосфере.\n"
+    "22:30 — Финальная шоу-программа\n"
+    "Музыкальное выступление и завершение официальной части вечера.\n"
+    "23:00 — Завершение мероприятия"
 )
 
 MESSAGE_KEY_INTRO = "intro"
@@ -122,9 +140,7 @@ REGISTRATION_STEP_MESSAGE_KEYS = {
 BOT_MESSAGE_TEMPLATES = {
     MESSAGE_KEY_INTRO: INTRO_TEXT,
     MESSAGE_KEY_REGISTRATION_INFO: REGISTRATION_INFO_TEXT,
-    MESSAGE_KEY_REGISTRATION_SUCCESS: (
-        f"{REGISTRATION_SUCCESS_TEXT}\n\nВаш билет №{{ticket_number}}."
-    ),
+    MESSAGE_KEY_REGISTRATION_SUCCESS: REGISTRATION_SUCCESS_TEXT,
     MESSAGE_KEY_EVENT_PROGRAM: EVENT_PROGRAM_TEXT,
     MESSAGE_KEY_ALREADY_REGISTERED: (
         "Вы уже зарегистрированы. Ваш билет №{ticket_number}."
@@ -145,11 +161,12 @@ BOT_MESSAGE_TEMPLATES = {
     ),
     MESSAGE_KEY_TICKET_NOT_FOUND: "Билет не найден. Пройдите регистрацию через /start.",
     MESSAGE_KEY_MY_TICKET: (
-        "Ваш билет на закрытое мероприятие Show & Circus.\n\n"
-        "Номер билета: {ticket_number}\n"
+        "ВАШ БИЛЕТ № {ticket_number}\n"
+        "на закрытое мероприятие от «Show & Circus».\n\n"
         "Локация: Papa Moscow Club\n"
-        "Дата и время: 16 марта, 18:00-23:00\n\n"
-        "Концепция вечера: Драгоценные камни."
+        "Дата и время: 16 марта, 18:00–23:00\n\n"
+        "Концепция вечера — «Драгоценные камни».\n"
+        "Гость это драгоценность, которая делает индустрию ярче."
     ),
     MESSAGE_KEY_NO_ACTIVE_TICKET: "Активного билета не найдено.",
     MESSAGE_KEY_TICKET_ALREADY_ACTIVATED: (
@@ -172,8 +189,14 @@ BOT_MESSAGE_TEMPLATES = {
 До встречи на мероприятии.
 """,
     MESSAGE_KEY_CONTACT_ORGANIZER: (
-        "Связь с организатором: @showandcircus_support\n"
-        "Если у вас нет Telegram-юзернейма для связи, ответьте на это сообщение."
+        "Контакты\n\n"
+        "Имя Sabina\n"
+        "Телефон 89857759888\n"
+        "Тг аккаунт @showandcircus\n\n"
+        "Show & Circus\n"
+        "Web: https://showandcircus.com/blog\n"
+        "IG: https://www.instagram.com/showandcircus\n\n"
+        "Звони или пиши! на связи 🤙"
     ),
     MESSAGE_KEY_FALLBACK_START: (
         "Напишите /start, чтобы открыть главное меню и регистрацию."
@@ -203,6 +226,7 @@ TICKET_QR_TOP_LEFT = (440, 258)
 MESSAGE_PHOTO_SOURCES: dict[str, str] = {
     MESSAGE_KEY_INTRO: "start_command.png",
     MESSAGE_KEY_REGISTRATION_INFO: "go_registration.png",
+    REGISTRATION_STEP_MESSAGE_KEYS["full_name"]: "go_registration.png",
     MESSAGE_KEY_REGISTRATION_SUCCESS: "registration_success.png",
     MESSAGE_KEY_MAIN_MENU: "main_menu.png",
     MESSAGE_KEY_EVENT_PROGRAM: "programma_of_event.png",
@@ -326,8 +350,8 @@ def build_start_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="ПРОЙТИ РЕГИСТРАЦИЮ",
-                    callback_data=CALLBACK_SHOW_REGISTRATION_INFO,
+                    text="ПОЛУЧИТЬ БИЛЕТ 🎫",
+                    callback_data=CALLBACK_START_REGISTRATION,
                 )
             ]
         ]
@@ -517,11 +541,8 @@ async def start_handler(message: Message, state: FSMContext) -> None:
             return
 
     await state.clear()
-    await send_bot_message(
-        message,
-        MESSAGE_KEY_REGISTRATION_INFO,
-        reply_markup=build_registration_entry_keyboard(),
-    )
+    await state.update_data(step_index=0, answers={})
+    await ask_next_step(message, state)
 
 
 @router.message(CommandStart())
@@ -556,12 +577,14 @@ async def show_registration_info(
     callback: CallbackQuery,
     state: FSMContext,
 ) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+
     await state.clear()
-    await edit_navigation_message(
-        callback,
-        MESSAGE_KEY_REGISTRATION_INFO,
-        reply_markup=build_registration_entry_keyboard(),
-    )
+    await state.update_data(step_index=0, answers={})
+    await ask_next_step(callback.message, state)
+    await callback.answer()
 
 
 @router.callback_query(F.data == CALLBACK_START_REGISTRATION)
@@ -692,7 +715,7 @@ async def complete_registration(
                 ticket_number=generate_unique_ticket_number(session),
             )
         elif (
-            len(visitor.ticket.ticket_number) < 13
+            not is_ticket_number_in_current_format(visitor.ticket.ticket_number)
             and not visitor.ticket.is_activated
         ):
             visitor.ticket.ticket_number = generate_unique_ticket_number(session)

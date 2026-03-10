@@ -1,10 +1,18 @@
 import hashlib
+import re
 import secrets
 
+TICKET_NUMBER_PATTERN = re.compile(r"^[A-Z]{2}-\d{4}$")
 
-def generate_ticket_number(length: int = 13) -> str:
-    upper_bound = 10**length
-    return f"{secrets.randbelow(upper_bound):0{length}d}"
+
+def generate_ticket_number() -> str:
+    letters = "".join(secrets.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ") for _ in range(2))
+    digits = "".join(secrets.choice("0123456789") for _ in range(4))
+    return f"{letters}-{digits}"
+
+
+def is_ticket_number_in_current_format(ticket_number: str) -> bool:
+    return bool(TICKET_NUMBER_PATTERN.fullmatch(ticket_number or ""))
 
 
 def build_lottery_code(ticket_number: str) -> str:
