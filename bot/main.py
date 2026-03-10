@@ -517,7 +517,7 @@ async def ask_next_step(message: Message, state: FSMContext) -> None:
             answers_data=answers,
         )
         ensure_ticket_image(ticket_number)
-        await message.answer("\u200b", reply_markup=ReplyKeyboardRemove())
+        # await message.answer("\u200b", reply_markup=ReplyKeyboardRemove())
         await send_bot_message(
             message,
             MESSAGE_KEY_REGISTRATION_SUCCESS,
