@@ -410,7 +410,34 @@ def build_phone_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
+def build_after_registration_keyboard() -> InlineKeyboardMarkup:
+    """3 кнопки под первым показом QR (без «Мой билет»)."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="ПРОГРАММА МЕРОПРИЯТИЯ",
+                    callback_data=CALLBACK_SHOW_EVENT_PROGRAM,
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="ПАРТНЁРЫ МЕРОПРИЯТИЯ",
+                    callback_data=CALLBACK_SHOW_PARTNERS,
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="СВЯЗАТЬСЯ С ОРГАНИЗАТОРОМ",
+                    callback_data=CALLBACK_CONTACT_ORGANIZER,
+                )
+            ],
+        ]
+    )
+
+
 def build_main_menu_keyboard() -> InlineKeyboardMarkup:
+    """4 кнопки в главном меню (после «Вернуться в главное меню»)."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -539,12 +566,12 @@ async def ask_next_step(message: Message, state: FSMContext) -> None:
             await message.answer_photo(
                 photo=FSInputFile(str(ticket_path)),
                 caption=caption,
-                reply_markup=build_main_menu_keyboard(),
+                reply_markup=build_after_registration_keyboard(),
             )
         else:
             await message.answer(
                 caption,
-                reply_markup=build_main_menu_keyboard(),
+                reply_markup=build_after_registration_keyboard(),
             )
         await state.clear()
         return
