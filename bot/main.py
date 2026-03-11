@@ -554,12 +554,12 @@ async def ask_next_step(message: Message, state: FSMContext) -> None:
     step_message_key = REGISTRATION_STEP_MESSAGE_KEYS[step.key]
     if step.key == "phone":
         from_user = message.from_user
-        username = from_user.first_name or "Пользователь"
+        first_name = from_user.first_name or "Пользователь"
         await send_bot_message(
             message,
             step_message_key,
             reply_markup=build_phone_keyboard(),
-            username=username,
+            first_name=first_name,
         )
     else:
         await send_bot_message(
