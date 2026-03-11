@@ -84,6 +84,14 @@ REGISTRATION_SUCCESS_TEXT = (
     'Персональный QR в разделе "мой билет" 👇'
 )
 
+TICKET_CONGRATULATIONS_TEXT = (
+    "«{name}», поздравляем 🥳\n\n"
+    "Вы успешно зарегистрированы на закрытый ивент «Драгоценные камни» от «Show&Circus» и партнеров.\n\n"
+    "Ждем вас 16 марта в 18:00♥️\n\n"
+    "Это ваш билет и вход на мероприятие!\n"
+    "просто предъявите QR-код👆"
+)
+
 PARTNERS_TEXT = (
     "Организатор:\n\n"
     "Партнеры:\n\n"
@@ -134,6 +142,7 @@ MESSAGE_KEY_EMPTY_ANSWER = "empty_answer"
 MESSAGE_KEY_PHONE_ONLY_CONTACT = "phone_only_contact"
 MESSAGE_KEY_TICKET_NOT_FOUND = "ticket_not_found"
 MESSAGE_KEY_MY_TICKET = "my_ticket"
+MESSAGE_KEY_TICKET_CONGRATULATIONS = "ticket_congratulations"
 MESSAGE_KEY_NO_ACTIVE_TICKET = "no_active_ticket"
 MESSAGE_KEY_TICKET_ALREADY_ACTIVATED = "ticket_already_activated"
 MESSAGE_KEY_TICKET_ANNULLED = "ticket_annulled"
@@ -186,6 +195,7 @@ BOT_MESSAGE_TEMPLATES = {
         "Концепция вечера — «Драгоценные камни».\n"
         "Гость это драгоценность, которая делает индустрию ярче."
     ),
+    MESSAGE_KEY_TICKET_CONGRATULATIONS: TICKET_CONGRATULATIONS_TEXT,
     MESSAGE_KEY_NO_ACTIVE_TICKET: "Активного билета не найдено.",
     MESSAGE_KEY_TICKET_ALREADY_ACTIVATED: (
         "Этот билет уже активирован на входе, аннулирование недоступно."
@@ -195,14 +205,7 @@ BOT_MESSAGE_TEMPLATES = {
         "Нам очень жаль, что вы не сможете присутствовать на мероприятии Show & Circus.\n"
         "Будем рады видеть вас на следующих событиях."
     ),
-    MESSAGE_KEY_MAIN_MENU: """Вы зарегистрированы на закрытом мероприятии Show & Circus.
-
-Ваш персональный билет ждёт вас в разделе «Мой билет».
-
-Если ваши планы изменятся вы можете аннулировать билет
-
-До встречи на мероприятии.
-""",
+    MESSAGE_KEY_MAIN_MENU: "Выберите нужный раздел👇",
     MESSAGE_KEY_CONTACT_ORGANIZER: (
         "Имя: Sabina\n"
         "Телефон: +79857759888\n"
@@ -327,16 +330,6 @@ async def send_bot_message(
     **context: str,
 ) -> None:
     text = render_bot_message(message_key, **context)
-    if message_key == MESSAGE_KEY_MAIN_MENU and context.get("ticket_number"):
-        ticket_path = ensure_ticket_image(context["ticket_number"])
-        if ticket_path:
-            await message.answer_photo(
-                photo=FSInputFile(str(ticket_path)),
-                caption=text,
-                reply_markup=reply_markup,
-                parse_mode="HTML",
-            )
-            return
     photo_source = MESSAGE_PHOTO_SOURCES.get(message_key)
     if photo_source:
         try:
@@ -422,6 +415,12 @@ def build_main_menu_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
+                    text="МОЙ БИЛЕТ",
+                    callback_data=CALLBACK_SHOW_MY_TICKET,
+                )
+            ],
+            [
+                InlineKeyboardButton(
                     text="ПРОГРАММА МЕРОПРИЯТИЯ",
                     callback_data=CALLBACK_SHOW_EVENT_PROGRAM,
                 )
@@ -503,17 +502,6 @@ async def edit_navigation_message(
         return
 
     text = render_bot_message(message_key, **context)
-    if message_key == MESSAGE_KEY_MAIN_MENU and context.get("ticket_number"):
-        ticket_path = ensure_ticket_image(context["ticket_number"])
-        if ticket_path:
-            await callback.message.answer_photo(
-                photo=FSInputFile(str(ticket_path)),
-                caption=text,
-                reply_markup=reply_markup,
-                parse_mode="HTML",
-            )
-            await callback.answer()
-            return
     photo_source = MESSAGE_PHOTO_SOURCES.get(message_key)
 
     if photo_source:
@@ -541,14 +529,24 @@ async def ask_next_step(message: Message, state: FSMContext) -> None:
             user=message.from_user,
             answers_data=answers,
         )
-        ensure_ticket_image(ticket_number)
-        # await message.answer("\u200b", reply_markup=ReplyKeyboardRemove())
-        await send_bot_message(
-            message,
-            MESSAGE_KEY_REGISTRATION_SUCCESS,
-            reply_markup=build_main_menu_keyboard(),
-            ticket_number=ticket_number,
+        ticket_path = ensure_ticket_image(ticket_number)
+        full_name = answers.get("full_name", "")
+        name = (full_name.split("\n")[0].strip() if full_name else "") or "Гость"
+        caption = render_bot_message(
+            MESSAGE_KEY_TICKET_CONGRATULATIONS,
+            name=name,
         )
+        if ticket_path:
+            await message.answer_photo(
+                photo=FSInputFile(str(ticket_path)),
+                caption=caption,
+                reply_markup=build_main_menu_keyboard(),
+            )
+        else:
+            await message.answer(
+                caption,
+                reply_markup=build_main_menu_keyboard(),
+            )
         await state.clear()
         return
 
@@ -585,9 +583,8 @@ async def start_handler(message: Message, state: FSMContext) -> None:
         if visitor and visitor.is_registration_completed and visitor.ticket:
             await send_bot_message(
                 message,
-                MESSAGE_KEY_ALREADY_REGISTERED,
+                MESSAGE_KEY_MAIN_MENU,
                 reply_markup=build_main_menu_keyboard(),
-                ticket_number=visitor.ticket.ticket_number,
             )
             return
 
@@ -609,9 +606,8 @@ async def start_command_handler(message: Message, state: FSMContext) -> None:
         if visitor and visitor.is_registration_completed and visitor.ticket:
             await send_bot_message(
                 message,
-                MESSAGE_KEY_ALREADY_REGISTERED,
+                MESSAGE_KEY_MAIN_MENU,
                 reply_markup=build_main_menu_keyboard(),
-                ticket_number=visitor.ticket.ticket_number,
             )
             return
 
@@ -797,21 +793,26 @@ async def show_my_ticket(callback: CallbackQuery) -> None:
             return
 
         ticket_number = visitor.ticket.ticket_number
+        full_name = visitor.full_name or ""
+        name = (full_name.split("\n")[0].strip() if full_name else "") or "Гость"
 
     ticket_image_path = ensure_ticket_image(ticket_number)
-    ticket_text = render_bot_message(MESSAGE_KEY_MY_TICKET, ticket_number=ticket_number)
+    ticket_text = render_bot_message(
+        MESSAGE_KEY_TICKET_CONGRATULATIONS,
+        name=name,
+    )
     if ticket_image_path is not None:
         await callback.message.answer_photo(
             photo=FSInputFile(str(ticket_image_path)),
             caption=ticket_text,
-            reply_markup=build_ticket_keyboard(),
+            reply_markup=build_back_to_main_menu_keyboard(),
         )
         await callback.answer()
         return
 
     await callback.message.answer(
         ticket_text,
-        reply_markup=build_ticket_keyboard(),
+        reply_markup=build_back_to_main_menu_keyboard(),
     )
     await callback.answer()
 
@@ -855,19 +856,10 @@ async def annul_ticket(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data == CALLBACK_BACK_TO_MAIN_MENU)
 async def back_to_main_menu(callback: CallbackQuery) -> None:
-    ticket_number: str | None = None
-    if callback.from_user:
-        with SessionLocal() as session:
-            visitor = session.scalar(
-                select(Visitor).where(Visitor.telegram_id == callback.from_user.id)
-            )
-            if visitor and visitor.ticket:
-                ticket_number = visitor.ticket.ticket_number
     await edit_navigation_message(
         callback,
         MESSAGE_KEY_MAIN_MENU,
         reply_markup=build_main_menu_keyboard(),
-        **({"ticket_number": ticket_number} if ticket_number else {}),
     )
 
 
