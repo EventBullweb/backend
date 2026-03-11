@@ -1,4 +1,5 @@
 import asyncio
+import html
 from pathlib import Path
 import re
 
@@ -301,7 +302,8 @@ def ensure_ticket_image(ticket_number: str) -> Path | None:
 
 def render_bot_message(message_key: str, **context: str) -> str:
     template = BOT_MESSAGE_TEMPLATES[message_key]
-    return template.format(**context)
+    safe_context = {k: html.escape(str(v)) for k, v in context.items()}
+    return template.format(**safe_context)
 
 
 def resolve_photo_source(photo_source: str) -> str | FSInputFile:
@@ -331,11 +333,12 @@ async def send_bot_message(
                 photo=resolve_photo_source(photo_source),
                 caption=text,
                 reply_markup=reply_markup,
+                parse_mode="HTML",
             )
             return
         except TelegramBadRequest:
             pass
-    await message.answer(text, reply_markup=reply_markup)
+    await message.answer(text, reply_markup=reply_markup, parse_mode="HTML")
 
 
 async def fetch_telegram_avatar_url(bot: Bot, telegram_id: int) -> str | None:
