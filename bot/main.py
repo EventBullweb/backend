@@ -204,14 +204,15 @@ BOT_MESSAGE_TEMPLATES = {
 До встречи на мероприятии.
 """,
     MESSAGE_KEY_CONTACT_ORGANIZER: (
-        "Контакты\n\n"
-        "Имя Sabina\n"
-        "Телефон 89857759888\n"
-        "Тг аккаунт @showandcircus\n\n"
-        "Show & Circus\n"
-        "Web: https://showandcircus.com/blog\n"
+        "Имя: Sabina\n"
+        "Телефон: +79857759888\n"
+        "Telegram: @showandcircus\n\n"
+        "Show&Circus\n"
+        "Сайт: https://showandcircus.com\n"
         "IG: https://www.instagram.com/showandcircus\n\n"
-        "Звони или пиши! на связи 🤙"
+        "Звоните, пишите!\n"
+        "Мы на связи 📱\n\n"
+        "*IG — социальная сеть признанная экстремистской и запрещённая на территории РФ"
     ),
     MESSAGE_KEY_FALLBACK_START: (
         "Напишите /start, чтобы открыть главное меню и регистрацию."
@@ -326,6 +327,16 @@ async def send_bot_message(
     **context: str,
 ) -> None:
     text = render_bot_message(message_key, **context)
+    if message_key == MESSAGE_KEY_MAIN_MENU and context.get("ticket_number"):
+        ticket_path = ensure_ticket_image(context["ticket_number"])
+        if ticket_path:
+            await message.answer_photo(
+                photo=FSInputFile(str(ticket_path)),
+                caption=text,
+                reply_markup=reply_markup,
+                parse_mode="HTML",
+            )
+            return
     photo_source = MESSAGE_PHOTO_SOURCES.get(message_key)
     if photo_source:
         try:
@@ -411,12 +422,6 @@ def build_main_menu_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="МОЙ БИЛЕТ / ФОРМАТ QR КОД",
-                    callback_data=CALLBACK_SHOW_MY_TICKET,
-                )
-            ],
-            [
-                InlineKeyboardButton(
                     text="ПРОГРАММА МЕРОПРИЯТИЯ",
                     callback_data=CALLBACK_SHOW_EVENT_PROGRAM,
                 )
@@ -498,6 +503,17 @@ async def edit_navigation_message(
         return
 
     text = render_bot_message(message_key, **context)
+    if message_key == MESSAGE_KEY_MAIN_MENU and context.get("ticket_number"):
+        ticket_path = ensure_ticket_image(context["ticket_number"])
+        if ticket_path:
+            await callback.message.answer_photo(
+                photo=FSInputFile(str(ticket_path)),
+                caption=text,
+                reply_markup=reply_markup,
+                parse_mode="HTML",
+            )
+            await callback.answer()
+            return
     photo_source = MESSAGE_PHOTO_SOURCES.get(message_key)
 
     if photo_source:
@@ -839,10 +855,19 @@ async def annul_ticket(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data == CALLBACK_BACK_TO_MAIN_MENU)
 async def back_to_main_menu(callback: CallbackQuery) -> None:
+    ticket_number: str | None = None
+    if callback.from_user:
+        with SessionLocal() as session:
+            visitor = session.scalar(
+                select(Visitor).where(Visitor.telegram_id == callback.from_user.id)
+            )
+            if visitor and visitor.ticket:
+                ticket_number = visitor.ticket.ticket_number
     await edit_navigation_message(
         callback,
         MESSAGE_KEY_MAIN_MENU,
         reply_markup=build_main_menu_keyboard(),
+        **({"ticket_number": ticket_number} if ticket_number else {}),
     )
 
 
