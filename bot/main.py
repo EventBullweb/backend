@@ -58,8 +58,8 @@ DELETE_BROADCAST_MARKER = "#удалить"
 
 INTRO_TEXT = (
     "Регистрация на мероприятие👇\n\n"
-    "Закрытое мероприятие от ивент агентства «Show & Circus».\n"
-    "мы собираем в Москве 200 гостей из индустрии событий!\n\n"
+    "Закрытое мероприятие «Драгоценные камни» от ивент-агентства «Show & Circus» и его Партнеров.\n"
+    "Мы пригласили  200+  гостей из ивент-сообщества  и наших уважаемых Клиентов.\n\n"
     "Локация: Papa Moscow Club\n"
     "Адрес: 1-ая Брестская, 2 стр. 3, Moscow, Russia\n"
     "Дата и время: 16 марта, \n18:00–23:00\n\n"
@@ -390,7 +390,13 @@ def build_registration_entry_keyboard() -> InlineKeyboardMarkup:
 def build_phone_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="Отправить контакт", request_contact=True)],
+            [
+                KeyboardButton(
+                    text="Отправить контакт",
+                    request_contact=True,
+                    style="primary",
+                )
+            ],
         ],
         resize_keyboard=True,
         one_time_keyboard=True,
@@ -530,10 +536,13 @@ async def ask_next_step(message: Message, state: FSMContext) -> None:
     step = REGISTRATION_STEPS[step_index]
     step_message_key = REGISTRATION_STEP_MESSAGE_KEYS[step.key]
     if step.key == "phone":
+        from_user = message.from_user
+        username = from_user.first_name or "Пользователь"
         await send_bot_message(
             message,
             step_message_key,
             reply_markup=build_phone_keyboard(),
+            username=username,
         )
     else:
         await send_bot_message(

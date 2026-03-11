@@ -13,7 +13,10 @@ REGISTRATION_STEPS = [
     RegistrationStep(
         key="phone",
         label="Контакт",
-        prompt="""Для регистрации нажмите кнопку 'Отправить контакт'.""",
+        prompt=(
+            "{username}, для получения билета подтвердите, что вы не робот — "
+            'оставьте свой номер телефона нажав кнопку "ОТПРАВИТЬ КОНТАКТ"👇'
+        ),
         required=True,
     ),
     RegistrationStep(
