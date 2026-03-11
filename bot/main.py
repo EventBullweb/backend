@@ -416,19 +416,19 @@ def build_after_registration_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="ПРОГРАММА МЕРОПРИЯТИЯ",
+                    text="🚀 Программа 🚀",
                     callback_data=CALLBACK_SHOW_EVENT_PROGRAM,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="ПАРТНЁРЫ МЕРОПРИЯТИЯ",
+                    text="🤝 Партнеры 🤝",
                     callback_data=CALLBACK_SHOW_PARTNERS,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="СВЯЗАТЬСЯ С ОРГАНИЗАТОРОМ",
+                    text="☎️ Организатор ☎️",
                     callback_data=CALLBACK_CONTACT_ORGANIZER,
                 )
             ],
@@ -442,25 +442,25 @@ def build_main_menu_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="МОЙ БИЛЕТ",
+                    text="✅ Мой билет ✅",
                     callback_data=CALLBACK_SHOW_MY_TICKET,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="ПРОГРАММА МЕРОПРИЯТИЯ",
+                    text="🚀 Программа 🚀",
                     callback_data=CALLBACK_SHOW_EVENT_PROGRAM,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="ПАРТНЁРЫ МЕРОПРИЯТИЯ",
+                    text="🤝 Партнеры 🤝",
                     callback_data=CALLBACK_SHOW_PARTNERS,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="СВЯЗАТЬСЯ С ОРГАНИЗАТОРОМ",
+                    text="☎️ Организатор ☎️",
                     callback_data=CALLBACK_CONTACT_ORGANIZER,
                 )
             ],
@@ -542,22 +542,29 @@ async def edit_navigation_message(
     await callback.answer()
 
 
-async def ask_next_step(message: Message, state: FSMContext) -> None:
+async def ask_next_step(
+    message: Message,
+    state: FSMContext,
+    from_user: User | None = None,
+) -> None:
+    """from_user — кто ведёт диалог (для шага «телефон»). Если не передан, берётся message.from_user (важно при вызове из callback: message от бота)."""
     data = await state.get_data()
     step_index = data.get("step_index", 0)
+    user = from_user or message.from_user
+
     if step_index >= len(REGISTRATION_STEPS):
-        if message.from_user is None:
+        if user is None:
             await send_bot_message(message, MESSAGE_KEY_USER_NOT_DETECTED)
             return
 
         answers = data.get("answers", {})
         ticket_number = await complete_registration(
             bot=message.bot,
-            user=message.from_user,
+            user=user,
             answers_data=answers,
         )
         ticket_path = ensure_ticket_image(ticket_number)
-        name = (message.from_user.first_name or "Гость") if message.from_user else "Гость"
+        name = (user.first_name or "Гость") if user else "Гость"
         caption = render_bot_message(
             MESSAGE_KEY_TICKET_CONGRATULATIONS,
             name=name,
@@ -579,8 +586,7 @@ async def ask_next_step(message: Message, state: FSMContext) -> None:
     step = REGISTRATION_STEPS[step_index]
     step_message_key = REGISTRATION_STEP_MESSAGE_KEYS[step.key]
     if step.key == "phone":
-        from_user = message.from_user
-        first_name = from_user.first_name or "Пользователь"
+        first_name = (user.first_name or "Пользователь") if user else "Пользователь"
         await send_bot_message(
             message,
             step_message_key,
@@ -656,7 +662,7 @@ async def show_registration_info(
 
     await state.clear()
     await state.update_data(step_index=0, answers={})
-    await ask_next_step(callback.message, state)
+    await ask_next_step(callback.message, state, from_user=callback.from_user)
     await callback.answer()
 
 
@@ -670,7 +676,7 @@ async def start_registration_from_button(
         return
 
     await state.update_data(step_index=0, answers={})
-    await ask_next_step(callback.message, state)
+    await ask_next_step(callback.message, state, from_user=callback.from_user)
     await callback.answer()
 
 
