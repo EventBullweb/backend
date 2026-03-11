@@ -85,7 +85,7 @@ REGISTRATION_SUCCESS_TEXT = (
 )
 
 TICKET_CONGRATULATIONS_TEXT = (
-    "«{name}», поздравляем 🥳\n\n"
+    "{name}, поздравляем 🥳\n\n"
     "Вы успешно зарегистрированы на закрытый ивент «Драгоценные камни» от «Show&Circus» и партнеров.\n\n"
     "Ждем вас 16 марта в 18:00♥️\n\n"
     "Это ваш билет и вход на мероприятие!\n"
@@ -530,8 +530,7 @@ async def ask_next_step(message: Message, state: FSMContext) -> None:
             answers_data=answers,
         )
         ticket_path = ensure_ticket_image(ticket_number)
-        full_name = answers.get("full_name", "")
-        name = (full_name.split("\n")[0].strip() if full_name else "") or "Гость"
+        name = (message.from_user.first_name or "Гость") if message.from_user else "Гость"
         caption = render_bot_message(
             MESSAGE_KEY_TICKET_CONGRATULATIONS,
             name=name,
@@ -793,9 +792,8 @@ async def show_my_ticket(callback: CallbackQuery) -> None:
             return
 
         ticket_number = visitor.ticket.ticket_number
-        full_name = visitor.full_name or ""
-        name = (full_name.split("\n")[0].strip() if full_name else "") or "Гость"
 
+    name = (callback.from_user.first_name or "Гость") if callback.from_user else "Гость"
     ticket_image_path = ensure_ticket_image(ticket_number)
     ticket_text = render_bot_message(
         MESSAGE_KEY_TICKET_CONGRATULATIONS,
