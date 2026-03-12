@@ -211,9 +211,9 @@ BOT_MESSAGE_TEMPLATES = {
         "Телефон: +79857759888\n"
         "Telegram: @showandcircus\n\n"
         "Show&Circus\n"
-        "Сайт: https://showandcircus.com\n"
+        "Сайт: https://showandcircus.com/blog\n"
         "IG: https://www.instagram.com/showandcircus\n\n"
-        "Звоните, пишите!\n"
+        "Создаем шоу, которое запоминается.\n"
         "Мы на связи 📱\n\n"
         "*IG — социальная сеть признанная экстремистской и запрещённая на территории РФ"
     ),
