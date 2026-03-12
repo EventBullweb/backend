@@ -107,6 +107,7 @@ PARTNERS_TEXT = (
     "9. Рилсмейкер Настя (http://clck.ru/3STeyw)\n\n"
     "10. Внедрение AI - Загоскин Александр (https://ai-resheniya.pro/)\n\n"
     "11. Разработка программного обеспечения Bullweb (http://www.bullweb.ru/)"
+    "12. Ателье-шоурум RVNS (https://t.me/RVNSSHOWROOM)"
 )
 
 EVENT_PROGRAM_TEXT = (
