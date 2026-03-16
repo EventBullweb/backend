@@ -8,7 +8,12 @@ from app.services.ticket_numbers import build_lottery_code
 
 
 def activate_ticket(db: Session, ticket_number: str) -> tuple[str, Ticket | None]:
-    ticket = db.scalar(select(Ticket).where(Ticket.ticket_number == ticket_number))
+    ticket = db.scalar(
+        select(Ticket).where(
+            Ticket.ticket_number == ticket_number,
+            Ticket.deleted_at.is_(None),
+        )
+    )
     if ticket is None:
         return "not_found", None
 
